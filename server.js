@@ -125,7 +125,9 @@ async function uploadFileToSupabase(file) {
   if (!supabase) return null;
   
   const fileContent = fs.readFileSync(file.path);
-  const fileName = `${file.fieldname}-${Date.now()}-${file.originalname}`;
+  const uniqueSuffix = Date.now() + '-' + Math.floor(Math.random() * 1e6);
+  const cleanExt = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '');
+  const fileName = `${file.fieldname}-${uniqueSuffix}${cleanExt}`;
   
   const { data, error } = await supabase.storage
     .from('media-bucket')
