@@ -1,0 +1,169 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin",
+      "fullName": "ผู้ดูแลระบบหลังบ้าน",
+      "role": "admin",
+      "status": "approved",
+      "createdAt": "2026-06-25T07:00:00.000Z"
+    },
+    {
+      "username": "pensri",
+      "password": "123",
+      "fullName": "ครูเพ็ญศรี มีสุข",
+      "role": "teacher",
+      "status": "approved",
+      "createdAt": "2026-06-25T07:00:00.000Z"
+    },
+    {
+      "username": "somchai",
+      "password": "123",
+      "fullName": "ครูสมชาย ยอดดี",
+      "role": "teacher",
+      "status": "approved",
+      "createdAt": "2026-06-25T07:30:00.000Z"
+    },
+    {
+      "username": "sompong",
+      "password": "123",
+      "fullName": "ครูสมพงษ์ เกียรติทวี",
+      "role": "teacher",
+      "status": "pending",
+      "createdAt": "2026-06-25T11:00:00.000Z"
+    }
+  ],
+  "media": [
+    {
+      "id": "m1",
+      "title": "คณิตศาสตร์แสนสนุก: การบวกเลขสองหลัก",
+      "description": "บทเรียนอิเล็กทรอนิกส์ สอนเทคนิคการบวกเลขสองหลักแบบเข้าใจง่าย สำหรับนักเรียนประถมต้น มีแบบทดลองสอดแทรกตลอดเนื้อหา",
+      "subject": "คณิตศาสตร์",
+      "level": "ประถมศึกษาปีที่ 1",
+      "type": "E-Book",
+      "author": "ครูสมชาย ยอดดี",
+      "sourceType": "link",
+      "fileUrl": "https://www.obec.go.th/",
+      "fileName": "",
+      "coverUrl": "",
+      "views": 0,
+      "downloads": 0,
+      "createdAt": "2026-06-25T08:00:00.000Z"
+    },
+    {
+      "id": "m2",
+      "title": "ระบบสุริยจักรวาลและดาวเคราะห์ 3 มิติ",
+      "description": "แอปพลิเคชันเพื่อการศึกษา เรียนรู้วิถีโคจรของดาวเคราะห์ในระบบสุริยะ แบบมีปฏิสัมพันธ์ 3 มิติ สามารถหมุนดูรายละเอียดได้รอบทิศทาง",
+      "subject": "วิทยาศาสตร์และเทคโนโลยี",
+      "level": "ประถมศึกษาปีที่ 4",
+      "type": "Application",
+      "author": "ครูรัตนา วงศ์สุวรรณ",
+      "sourceType": "link",
+      "fileUrl": "https://contentcenter.obec.go.th",
+      "fileName": "",
+      "coverUrl": "",
+      "views": 0,
+      "downloads": 0,
+      "createdAt": "2026-06-25T08:30:00.000Z"
+    },
+    {
+      "id": "m3",
+      "title": "สระและพยัญชนะไทยแสนสนุก",
+      "description": "วิดีโออนิเมชั่นประกอบเพลง สอนน้องๆ เรียนรู้อักษรไทย 44 ตัว และการออกเสียงสระพื้นฐานอย่างถูกต้อง สนุกสนานจำง่าย",
+      "subject": "ภาษาไทย",
+      "level": "อนุบาล",
+      "type": "Video",
+      "author": "ครูเพ็ญศรี มีสุข",
+      "sourceType": "link",
+      "fileUrl": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "fileName": "",
+      "coverUrl": "",
+      "views": 0,
+      "downloads": 0,
+      "createdAt": "2026-06-25T09:00:00.000Z"
+    },
+    {
+      "id": "m4",
+      "title": "English Vocabulary for Everyday Life",
+      "description": "ไฟล์เสียงออกเสียงคำศัพท์ภาษาอังกฤษที่จำเป็นในชีวิตประจำวัน โดยเจ้าของภาษา พร้อมคำแปลภาษาไทย เหมาะสำหรับฝึกการฟังและพูด",
+      "subject": "ภาษาต่างประเทศ",
+      "level": "ประถมศึกษาปีที่ 6",
+      "type": "Audio",
+      "author": "Teacher David Wilson",
+      "sourceType": "link",
+      "fileUrl": "https://contentcenter.obec.go.th",
+      "fileName": "",
+      "coverUrl": "",
+      "views": 0,
+      "downloads": 0,
+      "createdAt": "2026-06-25T09:15:00.000Z"
+    },
+    {
+      "id": "m5",
+      "title": "แผนที่ประวัติศาสตร์ไทยสมัยอยุธยา",
+      "description": "รูปภาพแผนที่ความละเอียดสูง แสดงเส้นทางการค้าและการตั้งถิ่นฐานในประวัติศาสตร์สมัยกรุงศรีอยุธยา ใช้ประกอบการเรียนการสอนสังคมศึกษา",
+      "subject": "สังคมศึกษา ศาสนา และวัฒนธรรม",
+      "level": "มัธยมศึกษาปีที่ 2",
+      "type": "Image",
+      "author": "ครูวิชัย แสงทอง",
+      "sourceType": "link",
+      "fileUrl": "https://contentcenter.obec.go.th",
+      "fileName": "",
+      "coverUrl": "",
+      "views": 0,
+      "downloads": 0,
+      "createdAt": "2026-06-25T09:45:00.000Z"
+    },
+    {
+      "id": "m6",
+      "title": "แบบทดสอบวัดระดับวิชาฟิสิกส์ ม.ปลาย",
+      "description": "คลังข้อสอบฟิสิกส์เรื่องกลศาสตร์และคลื่น สำหรับเตรียมสอบเข้ามหาวิทยาลัย มีเฉลยละเอียดและคำอธิบายสูตรอย่างเป็นขั้นตอน",
+      "subject": "วิทยาศาสตร์และเทคโนโลยี",
+      "level": "มัธยมศึกษาปีที่ 6",
+      "type": "Quiz",
+      "author": "ครูสมพงษ์ เกียรติทวี",
+      "sourceType": "link",
+      "fileUrl": "https://contentcenter.obec.go.th",
+      "fileName": "",
+      "coverUrl": "",
+      "views": 0,
+      "downloads": 0,
+      "createdAt": "2026-06-25T10:00:00.000Z"
+    }
+  ],
+  "subjects": [
+    "คณิตศาสตร์",
+    "วิทยาศาสตร์และเทคโนโลยี",
+    "ภาษาไทย",
+    "ภาษาต่างประเทศ",
+    "สังคมศึกษา ศาสนา และวัฒนธรรม",
+    "สุขศึกษาและพลศึกษา",
+    "ศิลปะ",
+    "การงานอาชีพ"
+  ],
+  "levels": [
+    "อนุบาล",
+    "ประถมศึกษาปีที่ 1",
+    "ประถมศึกษาปีที่ 2",
+    "ประถมศึกษาปีที่ 3",
+    "ประถมศึกษาปีที่ 4",
+    "ประถมศึกษาปีที่ 5",
+    "ประถมศึกษาปีที่ 6",
+    "มัธยมศึกษาปีที่ 1",
+    "มัธยมศึกษาปีที่ 2",
+    "มัธยมศึกษาปีที่ 3",
+    "มัธยมศึกษาปีที่ 4",
+    "มัธยมศึกษาปีที่ 5",
+    "มัธยมศึกษาปีที่ 6"
+  ],
+  "types": [
+    "E-Book",
+    "Application",
+    "Video",
+    "Audio",
+    "Image",
+    "Quiz",
+    "Template",
+    "Multimedia"
+  ]
+}
