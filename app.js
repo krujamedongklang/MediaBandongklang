@@ -951,23 +951,26 @@ function renderAdminTable(searchQuery = '') {
   const tbody = document.getElementById('admin-media-tbody');
   if (!tbody) return;
   
-  // Filter media
-  let filtered = state.media;
+  // Filter media safely
+  let filtered = (state.media || []).filter(item => item);
   
   // 1. Scoped view: Teachers only see their own media
   if (state.currentUser.role === 'teacher') {
-    filtered = state.media.filter(item => item.creatorUsername === state.currentUser.username);
+    filtered = filtered.filter(item => item.creatorUsername === state.currentUser.username);
   }
   
   const titleText = state.currentUser.role === 'teacher' ? 'รายการสื่อการสอนของคุณ' : 'รายการสื่อการสอนทั้งหมดในระบบ';
   
-  // 2. Toolbar search query filter
+  // 2. Toolbar search query filter (Extremely robust & case-insensitive)
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     filtered = filtered.filter(item => 
-      item.title.toLowerCase().includes(q) ||
-      item.author.toLowerCase().includes(q) ||
-      item.subject.toLowerCase().includes(q)
+      (item.title || '').toLowerCase().includes(q) ||
+      (item.author || '').toLowerCase().includes(q) ||
+      (item.subject || '').toLowerCase().includes(q) ||
+      (item.description || '').toLowerCase().includes(q) ||
+      (item.level || '').toLowerCase().includes(q) ||
+      (item.type || '').toLowerCase().includes(q)
     );
   }
   
@@ -989,9 +992,14 @@ function renderAdminTable(searchQuery = '') {
   
   tbody.innerHTML = filtered.map(item => {
     const coverUrl = item.coverUrl || '';
+    const subject = item.subject || '';
+    const type = item.type || '';
+    const level = item.level || '';
+    const author = item.author || '';
+    
     const imgHtml = coverUrl 
       ? `<img class="admin-table-cover" src="${coverUrl}" alt="">`
-      : `<div class="admin-table-cover" style="background-color: ${SUBJECT_COLORS[item.subject] || DEFAULT_COLOR}; opacity: 0.8; display:flex; align-items:center; justify-content:center; color:white; font-size:9px; font-weight:bold;">${item.type}</div>`;
+      : `<div class="admin-table-cover" style="background-color: ${SUBJECT_COLORS[subject] || DEFAULT_COLOR}; opacity: 0.8; display:flex; align-items:center; justify-content:center; color:white; font-size:9px; font-weight:bold;">${type}</div>`;
       
     // Permission check for actions (teachers can only edit/delete their own)
     const canManage = state.currentUser.role === 'admin' || item.creatorUsername === state.currentUser.username;
@@ -1013,10 +1021,10 @@ function renderAdminTable(searchQuery = '') {
         <td>
           <div class="admin-table-title" title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
         </td>
-        <td><span class="badge" style="background-color: ${SUBJECT_COLORS[item.subject] || DEFAULT_COLOR}; opacity: 0.85;">${item.subject}</span></td>
-        <td>${item.level}</td>
-        <td><strong>${item.type}</strong></td>
-        <td>${escapeHtml(item.author)}</td>
+        <td><span class="badge" style="background-color: ${SUBJECT_COLORS[subject] || DEFAULT_COLOR}; opacity: 0.85;">${subject}</span></td>
+        <td>${level}</td>
+        <td><strong>${type}</strong></td>
+        <td>${escapeHtml(author)}</td>
         <td>${item.views || 0} ชม / ${item.downloads || 0} โหลด</td>
         <td>${actionsHtml}</td>
       </tr>
