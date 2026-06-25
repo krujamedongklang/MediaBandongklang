@@ -152,13 +152,13 @@
     "ประถมศึกษาปีที่ 6"
   ],
   "types": [
-    "E-Book",
-    "Application",
-    "Video",
-    "Audio",
-    "Image",
+    "แผนการสอน",
+    "ใบงาน",
+    "รูปภาพ",
+    "วิดีโอ",
+    "เสียง",
     "Quiz",
-    "Template",
-    "Multimedia"
+    "E-Book",
+    "เกม"
   ]
 }
