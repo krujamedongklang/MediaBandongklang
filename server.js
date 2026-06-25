@@ -81,11 +81,52 @@ let supabase = null;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
+// Helper to seed default admin user in Supabase if missing
+async function seedAdminUser() {
+  if (!supabase) return;
+  try {
+    const { data: adminExists, error } = await supabase
+      .from('users')
+      .select('username')
+      .eq('username', 'admin')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Supabase Seed] Error checking for admin:', error.message);
+      return;
+    }
+
+    if (!adminExists) {
+      console.log('[Supabase Seed] Admin user not found in Supabase. Seeding default admin...');
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          username: 'admin',
+          password: 'admin', // default admin password
+          fullName: 'ผู้ดูแลระบบหลังบ้าน',
+          role: 'admin',
+          status: 'approved'
+        });
+      if (insertError) {
+        console.error('[Supabase Seed] Error seeding admin user:', insertError.message);
+      } else {
+        console.log('[Supabase Seed] Default admin user seeded successfully! (User: admin / Pass: admin)');
+      }
+    } else {
+      console.log('[Supabase Seed] Admin user already exists in database.');
+    }
+  } catch (err) {
+    console.error('[Supabase Seed] Unexpected error seeding admin user:', err);
+  }
+}
+
 if (SUPABASE_URL && SUPABASE_KEY) {
   try {
     const { createClient } = require('@supabase/supabase-js');
     supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     console.log('[Supabase] Initialized cloud client successfully!');
+    // Seeding admin user on startup
+    seedAdminUser();
   } catch (e) {
     console.error('[Supabase] Failed to initialize client:', e);
   }
