@@ -481,7 +481,7 @@ router.post('/api/media', upload.fields([
     res.status(201).json(newMedia);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการบันทึกสื่อการสอน' });
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการบันทึกสื่อการสอน: ' + (err.message || err) });
   }
 });
 
