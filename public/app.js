@@ -59,7 +59,7 @@ let state = {
   currentView: 'home', // 'home' or 'admin'
   currentDashboardTab: 'media', // 'media' or 'teachers'
   selectedMediaId: null,
-  currentUser: null // { username, fullName, role, token }
+  currentUser: null // { username, fullName, role }
 };
 
 // ==========================================================================
@@ -86,91 +86,64 @@ function clearUserSession() {
   localStorage.removeItem('userSession');
 }
 
+// Check logged in status
 function isLoggedIn() {
   return state.currentUser !== null;
 }
 
+// Check admin role
 function isUserAdmin() {
   return isLoggedIn() && state.currentUser.role === 'admin';
 }
 
 // ==========================================================================
-// SOCKET.IO INITIALIZATION (REAL-TIME UPDATES)
+// SUPABASE CLIENT INITIALIZATION & REAL-TIME UPDATES
 // ==========================================================================
-let socket;
+const SUPABASE_URL = 'https://rawqaihrdxfomrhqjolu.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_tDg5nx6DL0U-3u0ThwQaSA_2cF5ePoo';
+let supabaseClient;
+
 try {
-  socket = io({ path: '/educational-bandongklang/socket.io' });
+  const { createClient } = window.supabase;
+  supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
   
-  socket.on('connect', () => {
-    updateConnectionStatus(true);
-  });
-  
-  socket.on('disconnect', () => {
-    updateConnectionStatus(false);
-  });
-  
-  socket.on('media-updated', (update) => {
-    console.log('Realtime Media Update:', update);
-    if (update.db) {
-      state.media = update.db.media;
-      state.subjects = update.db.subjects;
-      state.levels = update.db.levels;
-      state.types = update.db.types;
+  // Real-time connections
+  supabaseClient
+    .channel('public:media')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'media' }, payload => {
+      console.log('Realtime Media Postgres Change:', payload);
+      fetchMediaData();
+    })
+    .subscribe();
+
+  supabaseClient
+    .channel('public:users')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, payload => {
+      console.log('Realtime Users Postgres Change:', payload);
+      if (isUserAdmin()) {
+        fetchTeachersData();
+      }
       
-      // Update teachers if admin received DB
-      if (isUserAdmin() && update.db.users) {
-        state.teachers = update.db.users.filter(u => u.role === 'teacher');
+      // If currently logged-in teacher account gets deleted/disabled, log them out
+      if (isLoggedIn() && state.currentUser.role === 'teacher') {
+        const payloadData = payload.new || {};
+        const oldData = payload.old || {};
+        const targetUsername = payloadData.username || oldData.username;
+        
+        if (targetUsername === state.currentUser.username) {
+          if (payload.eventType === 'DELETE' || payloadData.status !== 'approved') {
+            alert('บัญชีของคุณได้รับการปรับเปลี่ยนสถานะโดยแอดมิน กรุณาล็อกอินใหม่อีกครั้ง');
+            handleLogout();
+          }
+        }
       }
-    }
+    })
+    .subscribe();
     
-    renderStats();
-    renderCatalog();
-    renderAdminTable();
-    if (isUserAdmin()) {
-      renderTeachersTable();
-      updatePendingBadge();
-    }
-    
-    if (state.selectedMediaId && (state.selectedMediaId === update.id || (update.data && state.selectedMediaId === update.data.id))) {
-      if (update.action === 'delete') {
-        closeDetailModal();
-        alert('สื่อการสอนชิ้นนี้ถูกลบเรียบร้อยแล้ว');
-      } else {
-        renderDetailModalContent(state.selectedMediaId);
-      }
-    }
-  });
-
-  socket.on('teacher-registration', (newReq) => {
-    console.log('New teacher registration request:', newReq);
-    if (isUserAdmin()) {
-      fetchTeachersData(); // Reload teacher list
-      alert(`มีคำขอสมัครใช้งานใหม่จาก คุณครู: ${newReq.fullName}`);
-    }
-  });
-
-  socket.on('teacher-updated', (update) => {
-    console.log('Teacher state updated:', update);
-    if (update.db) {
-      state.teachers = update.db.users.filter(u => u.role === 'teacher');
-    }
-    if (isUserAdmin()) {
-      renderTeachersTable();
-      updatePendingBadge();
-    }
-    
-    // If currently logged-in teacher account gets deleted/disabled, log them out
-    if (isLoggedIn() && state.currentUser.role === 'teacher') {
-      const dbUsers = update.db ? update.db.users : [];
-      const currentExists = dbUsers.some(u => u.username === state.currentUser.username && u.status === 'approved');
-      if (!currentExists && update.username === state.currentUser.username) {
-        alert('บัญชีของคุณได้รับการปรับเปลี่ยนสถานะโดยแอดมิน กรุณาล็อกอินใหม่อีกครั้ง');
-        handleLogout();
-      }
-    }
-  });
+  updateConnectionStatus(true);
 } catch (e) {
-  console.warn('Real-time connection not available.');
+  console.error('Error initializing Supabase Client:', e);
+  updateConnectionStatus(false);
 }
 
 function updateConnectionStatus(isOnline) {
@@ -184,6 +157,60 @@ function updateConnectionStatus(isOnline) {
       dot.className = 'status-dot offline';
       txt.innerText = 'ออฟไลน์ (กำลังพยายามเชื่อมต่อใหม่...)';
     }
+  }
+}
+
+// ==========================================================================
+// FILE UPLOADER & DELETER HELPERS FOR SUPABASE STORAGE
+// ==========================================================================
+function getCleanExtension(fileName) {
+  const parts = fileName.split('.');
+  return parts.length > 1 ? '.' + parts.pop().toLowerCase() : '';
+}
+
+async function uploadFileToSupabase(file, prefix = 'mediaFile') {
+  const cleanExt = getCleanExtension(file.name);
+  const rawBase = file.name.substring(0, file.name.length - cleanExt.length);
+  const cleanBase = rawBase.replace(/[^\x00-\x7F]/g, ''); // ASCII only base name
+  
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+  const fileName = `${prefix}-${uniqueSuffix}${cleanExt}`;
+  
+  const { data, error } = await supabaseClient.storage
+    .from('media-bucket')
+    .upload(fileName, file, {
+      contentType: file.type,
+      cacheControl: '3600',
+      upsert: false
+    });
+    
+  if (error) {
+    throw error;
+  }
+  
+  const { data: publicUrlData } = supabaseClient.storage
+    .from('media-bucket')
+    .getPublicUrl(fileName);
+    
+  return publicUrlData.publicUrl;
+}
+
+function getFileNameFromUrl(url) {
+  if (!url) return null;
+  const parts = url.split('/');
+  return parts[parts.length - 1];
+}
+
+async function deleteFileFromSupabase(url) {
+  const fileName = getFileNameFromUrl(url);
+  if (!fileName) return;
+  
+  const { error } = await supabaseClient.storage
+    .from('media-bucket')
+    .remove([fileName]);
+    
+  if (error) {
+    console.error('Error deleting file from storage:', error);
   }
 }
 
@@ -480,17 +507,50 @@ function closeMobileDrawer() {
 }
 
 // ==========================================================================
-// DATA FETCHING (REST APIS)
+// DATA FETCHING (REST DIRECTLY TO SUPABASE)
 // ==========================================================================
 async function fetchMediaData() {
   try {
-    const response = await fetch('/educational-bandongklang/api/media');
-    const data = await response.json();
+    const { data: dbMedia, error } = await supabaseClient
+      .from('media')
+      .select('*')
+      .order('createdAt', { ascending: false });
+      
+    if (error) throw error;
     
-    state.media = data.media || [];
-    state.subjects = data.subjects || [];
-    state.levels = data.levels || [];
-    state.types = data.types || [];
+    state.media = dbMedia || [];
+    
+    // Core categories configuration list
+    state.subjects = [
+      "คณิตศาสตร์",
+      "วิทยาศาสตร์และเทคโนโลยี",
+      "ภาษาไทย",
+      "ภาษาต่างประเทศ",
+      "สังคมศึกษา ศาสนา และวัฒนธรรม",
+      "สุขศึกษาและพลศึกษา",
+      "ศิลปะ",
+      "การงานอาชีพ"
+    ];
+    state.levels = [
+      "อนุบาล 1",
+      "อนุบาล 2",
+      "ประถมศึกษาปีที่ 1",
+      "ประถมศึกษาปีที่ 2",
+      "ประถมศึกษาปีที่ 3",
+      "ประถมศึกษาปีที่ 4",
+      "ประถมศึกษาปีที่ 5",
+      "ประถมศึกษาปีที่ 6"
+    ];
+    state.types = [
+      "แผนการสอน",
+      "ใบงาน",
+      "รูปภาพ",
+      "วิดีโอ",
+      "เสียง",
+      "Quiz",
+      "E-Book",
+      "เกม"
+    ];
     
     populateFormSelects();
     renderStats();
@@ -505,8 +565,14 @@ async function fetchMediaData() {
 async function fetchTeachersData() {
   if (!isUserAdmin()) return;
   try {
-    const response = await fetch('/educational-bandongklang/api/admin/teachers');
-    const data = await response.json();
+    const { data, error } = await supabaseClient
+      .from('users')
+      .select('*')
+      .eq('role', 'teacher')
+      .order('createdAt', { ascending: false });
+      
+    if (error) throw error;
+    
     state.teachers = data || [];
     renderTeachersTable();
     updatePendingBadge();
@@ -764,34 +830,42 @@ function closeDetailModal() {
 
 async function incrementViewCount(mediaId) {
   try {
-    const res = await fetch(`/educational-bandongklang/api/media/${mediaId}/view`, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      const item = state.media.find(m => m.id === mediaId);
-      if (item) {
-        item.views = data.views;
-        renderStats();
-      }
-    }
+    const item = state.media.find(m => m.id === mediaId);
+    if (!item) return;
+    
+    const newViews = (item.views || 0) + 1;
+    const { error } = await supabaseClient
+      .from('media')
+      .update({ views: newViews })
+      .eq('id', mediaId);
+      
+    if (error) throw error;
+    
+    item.views = newViews;
+    renderStats();
   } catch (err) {
-    console.error(err);
+    console.error('Error incrementing view count:', err);
   }
 }
 
 async function incrementDownloadCount(mediaId) {
   try {
-    const res = await fetch(`/educational-bandongklang/api/media/${mediaId}/download`, { method: 'POST' });
-    const data = await res.json();
-    if (data.success) {
-      const item = state.media.find(m => m.id === mediaId);
-      if (item) {
-        item.downloads = data.downloads;
-        renderStats();
-        renderDetailModalContent(mediaId);
-      }
-    }
+    const item = state.media.find(m => m.id === mediaId);
+    if (!item) return;
+    
+    const newDownloads = (item.downloads || 0) + 1;
+    const { error } = await supabaseClient
+      .from('media')
+      .update({ downloads: newDownloads })
+      .eq('id', mediaId);
+      
+    if (error) throw error;
+    
+    item.downloads = newDownloads;
+    renderStats();
+    renderDetailModalContent(mediaId);
   } catch (err) {
-    console.error(err);
+    console.error('Error incrementing download count:', err);
   }
 }
 
@@ -869,33 +943,47 @@ async function handleLoginSubmit(e) {
   const passwordInput = document.getElementById('password');
   const loginErrorMsg = document.getElementById('login-error-msg');
   
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value.trim();
+  
   try {
-    const response = await fetch('/educational-bandongklang/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: usernameInput.value.trim(),
-        password: passwordInput.value.trim()
-      })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok && data.success) {
-      saveUserSession(data);
-      loginErrorMsg.classList.add('hidden');
-      usernameInput.value = '';
-      passwordInput.value = '';
+    const { data: user, error } = await supabaseClient
+      .from('users')
+      .select('*')
+      .eq('username', username)
+      .maybeSingle();
       
-      updateHeaderLoginStatus();
-      checkDashboardView();
-    } else {
-      loginErrorMsg.innerText = data.error || 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
+    if (error) throw error;
+    
+    if (!user || user.password !== password) {
+      loginErrorMsg.innerText = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
       loginErrorMsg.classList.remove('hidden');
+      return;
     }
+    
+    if (user.role === 'teacher' && user.status === 'pending') {
+      loginErrorMsg.innerText = 'บัญชีของคุณกำลังรอการอนุมัติจากแอดมิน';
+      loginErrorMsg.classList.remove('hidden');
+      return;
+    }
+    
+    const sessionData = {
+      success: true,
+      username: user.username,
+      fullName: user.fullName,
+      role: user.role
+    };
+    
+    saveUserSession(sessionData);
+    loginErrorMsg.classList.add('hidden');
+    usernameInput.value = '';
+    passwordInput.value = '';
+    
+    updateHeaderLoginStatus();
+    checkDashboardView();
   } catch (err) {
     console.error('Login error:', err);
-    loginErrorMsg.innerText = 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์';
+    loginErrorMsg.innerText = 'เกิดข้อผิดพลาดในการเชื่อมต่อฐานข้อมูล';
     loginErrorMsg.classList.remove('hidden');
   }
 }
@@ -913,25 +1001,39 @@ async function handleRegisterSubmit(e) {
   successBox.classList.add('hidden');
   
   try {
-    const response = await fetch('/educational-bandongklang/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, fullName })
-    });
+    const { data: existingUser, error: checkError } = await supabaseClient
+      .from('users')
+      .select('username')
+      .eq('username', username)
+      .maybeSingle();
+      
+    if (checkError) throw checkError;
     
-    const data = await response.json();
-    
-    if (response.ok) {
-      successBox.innerText = data.message || 'ส่งคำขอสมัครเรียบร้อยแล้ว กรุณารอแอดมินอนุมัติ';
-      successBox.classList.remove('hidden');
-      document.getElementById('register-form').reset();
-    } else {
-      errBox.innerText = data.error || 'เกิดข้อผิดพลาดในการลงทะเบียน';
+    if (existingUser) {
+      errBox.innerText = 'ชื่อผู้ใช้นี้ถูกใช้งานแล้ว';
       errBox.classList.remove('hidden');
+      return;
     }
+    
+    const { error: insertError } = await supabaseClient
+      .from('users')
+      .insert({
+        username,
+        password,
+        fullName,
+        role: 'teacher',
+        status: 'pending',
+        createdAt: new Date().toISOString()
+      });
+      
+    if (insertError) throw insertError;
+    
+    successBox.innerText = 'ส่งคำขอสมัครเรียบร้อยแล้ว กรุณารอแอดมินอนุมัติ';
+    successBox.classList.remove('hidden');
+    document.getElementById('register-form').reset();
   } catch (err) {
     console.error('Register error:', err);
-    errBox.innerText = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้';
+    errBox.innerText = 'ไม่สามารถบันทึกข้อมูลสมัครงานได้';
     errBox.classList.remove('hidden');
   }
 }
@@ -951,17 +1053,14 @@ function renderAdminTable(searchQuery = '') {
   const tbody = document.getElementById('admin-media-tbody');
   if (!tbody) return;
   
-  // Filter media safely
   let filtered = (state.media || []).filter(item => item);
   
-  // 1. Scoped view: Teachers only see their own media
   if (state.currentUser.role === 'teacher') {
     filtered = filtered.filter(item => item.creatorUsername === state.currentUser.username);
   }
   
   const titleText = state.currentUser.role === 'teacher' ? 'รายการสื่อการสอนของคุณ' : 'รายการสื่อการสอนทั้งหมดในระบบ';
   
-  // 2. Toolbar search query filter (Extremely robust & case-insensitive)
   if (searchQuery) {
     const q = searchQuery.toLowerCase();
     filtered = filtered.filter(item => 
@@ -1001,7 +1100,6 @@ function renderAdminTable(searchQuery = '') {
       ? `<img class="admin-table-cover" src="${coverUrl}" alt="">`
       : `<div class="admin-table-cover" style="background-color: ${SUBJECT_COLORS[subject] || DEFAULT_COLOR}; opacity: 0.8; display:flex; align-items:center; justify-content:center; color:white; font-size:9px; font-weight:bold;">${type}</div>`;
       
-    // Permission check for actions (teachers can only edit/delete their own)
     const canManage = state.currentUser.role === 'admin' || item.creatorUsername === state.currentUser.username;
     
     const actionsHtml = canManage ? `
@@ -1038,21 +1136,28 @@ window.handleDeleteMedia = async function(mediaId) {
   
   if (confirm(`คุณต้องการลบสื่อการสอนเรื่อง "${item.title}" ออกจากคลังใช่หรือไม่?`)) {
     try {
-      const response = await fetch(`/educational-bandongklang/api/media/${mediaId}`, {
-        method: 'DELETE'
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        state.media = state.media.filter(m => m.id !== mediaId);
-        renderStats();
-        renderCatalog();
-        renderAdminTable();
-      } else {
-        alert(data.error || 'เกิดข้อผิดพลาดในการลบสื่อ');
+      if (item.coverUrl && item.coverUrl.includes('supabase.co')) {
+        await deleteFileFromSupabase(item.coverUrl);
       }
+      
+      if (item.sourceType === 'upload' && item.fileUrl && item.fileUrl.includes('supabase.co')) {
+        await deleteFileFromSupabase(item.fileUrl);
+      }
+      
+      const { error } = await supabaseClient
+        .from('media')
+        .delete()
+        .eq('id', mediaId);
+        
+      if (error) throw error;
+      
+      state.media = state.media.filter(m => m.id !== mediaId);
+      renderStats();
+      renderCatalog();
+      renderAdminTable();
     } catch (err) {
-      console.error(err);
-      alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อลบข้อมูล');
+      console.error('Error deleting media:', err);
+      alert('เกิดข้อผิดพลาดในการลบสื่อการเรียนรู้');
     }
   }
 };
@@ -1084,7 +1189,6 @@ function renderTeachersTable() {
     const statusClass = user.status === 'approved' ? 'approved' : 'pending';
     const statusText = user.status === 'approved' ? 'อนุมัติแล้ว' : 'รอการอนุมัติ';
     
-    // Actions
     const approveBtn = user.status === 'pending' 
       ? `<button class="primary-btn" onclick="approveTeacherAccount('${user.username}')" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">อนุมัติสิทธิ์</button>`
       : `<span style="font-size:0.8rem; color:var(--color-text-light); font-weight:600;">อนุญาตแล้ว</span>`;
@@ -1111,36 +1215,34 @@ function renderTeachersTable() {
 window.approveTeacherAccount = async function(username) {
   if (!confirm(`คุณต้องการอนุมัติสิทธิ์ให้ คุณครูผู้ใช้ "${username}" สามารถเข้าระบบเพื่ออัปโหลดสื่อได้ใช่หรือไม่?`)) return;
   try {
-    const res = await fetch(`/educational-bandongklang/api/admin/teachers/${username}/approve`, {
-      method: 'PUT'
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      fetchTeachersData(); // Refresh list
-    } else {
-      alert(data.error || 'เกิดข้อผิดพลาด');
-    }
+    const { error } = await supabaseClient
+      .from('users')
+      .update({ status: 'approved' })
+      .eq('username', username);
+      
+    if (error) throw error;
+    
+    fetchTeachersData(); // Refresh list
   } catch (err) {
     console.error(err);
-    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    alert('เกิดข้อผิดพลาดในการอนุมัติบัญชี');
   }
 };
 
 window.deleteTeacherAccount = async function(username) {
   if (!confirm(`คุณต้องการลบหรือปฏิเสธคำขอบัญชีคุณครู "${username}" ออกจากระบบถาวรใช่หรือไม่?`)) return;
   try {
-    const res = await fetch(`/educational-bandongklang/api/admin/teachers/${username}`, {
-      method: 'DELETE'
-    });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      fetchTeachersData(); // Refresh list
-    } else {
-      alert(data.error || 'เกิดข้อผิดพลาด');
-    }
+    const { error } = await supabaseClient
+      .from('users')
+      .delete()
+      .eq('username', username);
+      
+    if (error) throw error;
+    
+    fetchTeachersData(); // Refresh list
   } catch (err) {
     console.error(err);
-    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    alert('เกิดข้อผิดพลาดในการลบข้อมูลบัญชี');
   }
 };
 
@@ -1154,7 +1256,6 @@ window.openFormModal = function(mediaId = null) {
   document.getElementById('cover-file-name-indicator').innerText = '';
   document.getElementById('media-file-name-indicator').innerText = '';
   
-  // Set default Author name as logged in user's full name
   document.getElementById('form-author').value = state.currentUser.fullName;
   
   if (mediaId) {
@@ -1201,53 +1302,121 @@ async function handleFormSubmit(e) {
   const mediaId = document.getElementById('form-media-id').value;
   const isEdit = mediaId !== '';
   
-  const formData = new FormData();
-  formData.append('title', document.getElementById('form-title').value.trim());
-  formData.append('author', document.getElementById('form-author').value.trim());
-  formData.append('description', document.getElementById('form-description').value.trim());
-  formData.append('subject', document.getElementById('form-subject').value);
-  formData.append('level', document.getElementById('form-level').value);
-  formData.append('type', document.getElementById('form-type').value);
-  
-  // Track creator username on backend
-  formData.append('creatorUsername', state.currentUser.username);
-  
+  const title = document.getElementById('form-title').value.trim();
+  const author = document.getElementById('form-author').value.trim();
+  const description = document.getElementById('form-description').value.trim();
+  const subject = document.getElementById('form-subject').value;
+  const level = document.getElementById('form-level').value;
+  const type = document.getElementById('form-type').value;
   const sourceType = document.querySelector('input[name="form-source-type"]:checked').value;
-  formData.append('sourceType', sourceType);
-  
-  if (sourceType === 'link') {
-    formData.append('fileUrl', document.getElementById('form-file-url').value.trim());
-  } else {
-    const fileInput = document.getElementById('form-media-file');
-    if (fileInput.files.length > 0) {
-      formData.append('mediaFile', fileInput.files[0]);
-    }
-  }
-  
-  const coverInput = document.getElementById('form-cover-file');
-  if (coverInput.files.length > 0) {
-    formData.append('coverImage', coverInput.files[0]);
-  }
-  
-  const url = isEdit ? `/educational-bandongklang/api/media/${mediaId}` : '/educational-bandongklang/api/media';
-  const method = isEdit ? 'PUT' : 'POST';
   
   try {
-    const response = await fetch(url, {
-      method: method,
-      body: formData
-    });
+    let finalFileUrl = '';
+    let originalName = '';
+    let finalCoverUrl = '';
     
-    if (response.ok) {
-      const savedMedia = await response.json();
-      closeFormModal();
-    } else {
-      const errData = await response.json();
-      alert(errData.error || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    let existingItem = null;
+    if (isEdit) {
+      existingItem = state.media.find(m => m.id === mediaId);
+      if (existingItem) {
+        finalFileUrl = existingItem.fileUrl || '';
+        originalName = existingItem.fileName || '';
+        finalCoverUrl = existingItem.coverUrl || '';
+      }
     }
+    
+    // 1. Process Cover Image File Upload
+    const coverInput = document.getElementById('form-cover-file');
+    if (coverInput.files.length > 0) {
+      if (isEdit && finalCoverUrl && finalCoverUrl.includes('supabase.co')) {
+        await deleteFileFromSupabase(finalCoverUrl);
+      }
+      finalCoverUrl = await uploadFileToSupabase(coverInput.files[0], 'coverImage');
+    }
+    
+    // 2. Process Media File / Link
+    if (sourceType === 'link') {
+      const linkVal = document.getElementById('form-file-url').value.trim();
+      if (isEdit && existingItem && existingItem.sourceType === 'upload' && finalFileUrl && finalFileUrl.includes('supabase.co')) {
+        await deleteFileFromSupabase(finalFileUrl);
+        originalName = '';
+      }
+      finalFileUrl = linkVal;
+    } else {
+      const fileInput = document.getElementById('form-media-file');
+      if (fileInput.files.length > 0) {
+        if (isEdit && existingItem && existingItem.sourceType === 'upload' && finalFileUrl && finalFileUrl.includes('supabase.co')) {
+          await deleteFileFromSupabase(finalFileUrl);
+        }
+        finalFileUrl = await uploadFileToSupabase(fileInput.files[0], 'mediaFile');
+        originalName = fileInput.files[0].name;
+      } else if (!isEdit) {
+        throw new Error('กรุณาเลือกไฟล์สื่อการสอนที่จะอัปโหลด');
+      }
+    }
+    
+    // 3. Save to Supabase PostgreSQL Database
+    if (isEdit) {
+      const updatedMedia = {
+        title,
+        author,
+        description,
+        subject,
+        level,
+        type,
+        sourceType,
+        fileUrl: finalFileUrl,
+        fileName: originalName,
+        coverUrl: finalCoverUrl
+      };
+      
+      const { error } = await supabaseClient
+        .from('media')
+        .update(updatedMedia)
+        .eq('id', mediaId);
+        
+      if (error) throw error;
+      
+      if (existingItem) {
+        Object.assign(existingItem, updatedMedia);
+      }
+    } else {
+      const newMedia = {
+        id: 'm_' + Date.now(),
+        title,
+        author,
+        description,
+        subject,
+        level,
+        type,
+        sourceType,
+        fileUrl: finalFileUrl,
+        fileName: originalName,
+        coverUrl: finalCoverUrl,
+        creatorUsername: state.currentUser.username,
+        views: 0,
+        downloads: 0,
+        createdAt: new Date().toISOString()
+      };
+      
+      const { error } = await supabaseClient
+        .from('media')
+        .insert(newMedia);
+        
+      if (error) throw error;
+      
+      state.media.unshift(newMedia);
+    }
+    
+    populateFormSelects();
+    renderStats();
+    renderCatalog();
+    renderAdminTable();
+    closeFormModal();
+    
   } catch (err) {
-    console.error('Error submitting form:', err);
-    alert('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อบันทึกข้อมูล');
+    console.error('Error saving media:', err);
+    alert(err.message || 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
   } finally {
     submitBtn.innerText = originalText;
     submitBtn.disabled = false;
