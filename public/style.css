@@ -1441,7 +1441,7 @@ img {
   color: var(--color-text-muted);
 }
 
-#media-upload-form {
+#media-upload-form, #profile-form {
   padding: 1.5rem 2rem;
   overflow-y: auto;
   display: flex;
