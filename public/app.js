@@ -295,6 +295,34 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('change-password-btn').addEventListener('click', handleChangePassword);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   
+  // Profile settings listeners
+  document.getElementById('edit-profile-btn').addEventListener('click', () => openProfileModal());
+  document.getElementById('close-profile-modal').addEventListener('click', closeProfileModal);
+  document.getElementById('cancel-profile-btn').addEventListener('click', closeProfileModal);
+  document.getElementById('profile-modal').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('profile-modal')) closeProfileModal();
+  });
+  document.getElementById('profile-form').addEventListener('submit', handleProfileSubmit);
+  
+  setupFileLabelHelper('profile-avatar-file', 'profile-avatar-name-indicator', 'เลือกภาพประจำตัว (.jpg, .png)');
+  const avatarInput = document.getElementById('profile-avatar-file');
+  if (avatarInput) {
+    avatarInput.addEventListener('change', (e) => {
+      const preview = document.getElementById('profile-avatar-preview');
+      const placeholder = document.getElementById('profile-avatar-placeholder');
+      if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          preview.src = event.target.result;
+          preview.style.display = 'block';
+          if (placeholder) placeholder.style.display = 'none';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+  
   // Dashboard Sub-Tabs
   document.getElementById('dash-tab-media').addEventListener('click', () => switchDashboardTab('media'));
   document.getElementById('dash-tab-teachers').addEventListener('click', () => switchDashboardTab('teachers'));
@@ -405,6 +433,18 @@ function checkDashboardView() {
     const title = document.getElementById('dashboard-user-title');
     const desc = document.getElementById('dashboard-user-desc');
     const tabsNav = document.getElementById('dashboard-tabs-nav');
+    
+    // Render profile avatar if exists
+    const avatarWrapper = document.getElementById('dashboard-user-avatar-wrapper');
+    const avatarImg = document.getElementById('dashboard-user-avatar');
+    if (avatarWrapper && avatarImg) {
+      if (state.currentUser.avatarUrl) {
+        avatarImg.src = state.currentUser.avatarUrl;
+        avatarWrapper.style.display = 'flex';
+      } else {
+        avatarWrapper.style.display = 'none';
+      }
+    }
     
     if (state.currentUser.role === 'admin') {
       title.innerText = 'ระบบหลังบ้านผู้ดูแลระบบ (Admin Control)';
@@ -972,7 +1012,8 @@ async function handleLoginSubmit(e) {
       success: true,
       username: user.username,
       fullName: user.fullName,
-      role: user.role
+      role: user.role,
+      avatarUrl: user.avatarUrl
     };
     
     saveUserSession(sessionData);
@@ -1097,6 +1138,86 @@ async function handleChangePassword() {
   } catch (err) {
     console.error('Error changing password:', err);
     alert("เกิดข้อผิดพลาดในการบันทึกรหัสผ่านใหม่");
+  }
+}
+
+window.openProfileModal = function() {
+  if (!isLoggedIn()) return;
+  const form = document.getElementById('profile-form');
+  form.reset();
+  
+  document.getElementById('profile-avatar-name-indicator').innerText = '';
+  document.getElementById('profile-fullName').value = state.currentUser.fullName;
+  
+  const preview = document.getElementById('profile-avatar-preview');
+  const placeholder = document.getElementById('profile-avatar-placeholder');
+  
+  if (state.currentUser.avatarUrl) {
+    preview.src = state.currentUser.avatarUrl;
+    preview.style.display = 'block';
+    if (placeholder) placeholder.style.display = 'none';
+  } else {
+    preview.style.display = 'none';
+    if (placeholder) placeholder.style.display = 'block';
+  }
+  
+  document.getElementById('profile-modal').classList.add('open');
+};
+
+window.closeProfileModal = function() {
+  document.getElementById('profile-modal').classList.remove('open');
+};
+
+async function handleProfileSubmit(e) {
+  e.preventDefault();
+  
+  const submitBtn = document.getElementById('submit-profile-btn');
+  const originalText = submitBtn.innerText;
+  submitBtn.innerText = 'กำลังบันทึกข้อมูล...';
+  submitBtn.disabled = true;
+  
+  const fullName = document.getElementById('profile-fullName').value.trim();
+  const username = state.currentUser.username;
+  
+  try {
+    let finalAvatarUrl = state.currentUser.avatarUrl || '';
+    
+    // 1. Process Avatar File Upload
+    const avatarInput = document.getElementById('profile-avatar-file');
+    if (avatarInput.files.length > 0) {
+      if (finalAvatarUrl && finalAvatarUrl.includes('supabase.co')) {
+        await deleteFileFromSupabase(finalAvatarUrl);
+      }
+      finalAvatarUrl = await uploadFileToSupabase(avatarInput.files[0], 'avatarImage');
+    }
+    
+    // 2. Save to Supabase
+    const { error } = await supabaseClient
+      .from('users')
+      .update({
+        fullName: fullName,
+        avatarUrl: finalAvatarUrl
+      })
+      .eq('username', username);
+      
+    if (error) throw error;
+    
+    // 3. Update session
+    state.currentUser.fullName = fullName;
+    state.currentUser.avatarUrl = finalAvatarUrl;
+    saveUserSession(state.currentUser);
+    
+    alert('บันทึกข้อมูลโปรไฟล์ของคุณเรียบร้อยแล้ว!');
+    closeProfileModal();
+    updateHeaderLoginStatus();
+    checkDashboardView();
+    
+  } catch (err) {
+    console.error('Error saving profile:', err);
+    alert('เกิดข้อผิดพลาดในการบันทึกข้อมูลโปรไฟล์');
+  } finally {
+    submitBtn.innerText = originalText;
+    submitBtn.disabled = false;
   }
 }
 
