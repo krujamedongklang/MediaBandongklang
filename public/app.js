@@ -292,11 +292,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Forms submissions
   document.getElementById('login-form').addEventListener('submit', handleLoginSubmit);
   document.getElementById('register-form').addEventListener('submit', handleRegisterSubmit);
-  document.getElementById('change-password-btn').addEventListener('click', handleChangePassword);
-  document.getElementById('logout-btn').addEventListener('click', handleLogout);
+  document.getElementById('dropdown-change-password-btn').addEventListener('click', handleChangePassword);
+  document.getElementById('dropdown-logout-btn').addEventListener('click', handleLogout);
   
   // Profile settings listeners
-  document.getElementById('edit-profile-btn').addEventListener('click', () => openProfileModal());
+  document.getElementById('dropdown-edit-profile-btn').addEventListener('click', () => openProfileModal());
   document.getElementById('close-profile-modal').addEventListener('click', closeProfileModal);
   document.getElementById('cancel-profile-btn').addEventListener('click', closeProfileModal);
   document.getElementById('profile-modal').addEventListener('click', (e) => {
@@ -472,6 +472,9 @@ function checkDashboardView() {
 function updateHeaderLoginStatus() {
   const navText = document.getElementById('nav-login-status-text');
   const mobileText = document.querySelectorAll('#mobile-login-status-text');
+  const userMenuContainer = document.getElementById('user-menu-container');
+  const navLoginIcon = document.getElementById('nav-login-icon');
+  const navLoginAvatar = document.getElementById('nav-login-avatar');
   
   if (isLoggedIn()) {
     const displayName = state.currentUser.fullName.split(' ')[0]; // Show first name only
@@ -480,9 +483,28 @@ function updateHeaderLoginStatus() {
     
     if (navText) navText.innerText = statusStr;
     mobileText.forEach(el => el.innerText = statusStr);
+    
+    if (userMenuContainer) userMenuContainer.classList.add('logged-in');
+    
+    // Header mini avatar logic
+    if (state.currentUser.avatarUrl) {
+      if (navLoginAvatar) {
+        navLoginAvatar.src = state.currentUser.avatarUrl;
+        navLoginAvatar.style.display = 'inline-block';
+      }
+      if (navLoginIcon) navLoginIcon.style.display = 'none';
+    } else {
+      if (navLoginAvatar) navLoginAvatar.style.display = 'none';
+      if (navLoginIcon) navLoginIcon.style.display = 'inline-block';
+    }
   } else {
-    if (navText) navText.innerText = 'เข้าสู่ระบบ / สมัครครู';
-    mobileText.forEach(el => el.innerText = 'เข้าสู่ระบบ / สมัครครู');
+    const statusStr = 'เข้าสู่ระบบ / จัดการสื่อ';
+    if (navText) navText.innerText = statusStr;
+    mobileText.forEach(el => el.innerText = statusStr);
+    
+    if (userMenuContainer) userMenuContainer.classList.remove('logged-in');
+    if (navLoginAvatar) navLoginAvatar.style.display = 'none';
+    if (navLoginIcon) navLoginIcon.style.display = 'inline-block';
   }
 }
 
