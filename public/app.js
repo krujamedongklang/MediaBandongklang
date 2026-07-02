@@ -292,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Forms submissions
   document.getElementById('login-form').addEventListener('submit', handleLoginSubmit);
   document.getElementById('register-form').addEventListener('submit', handleRegisterSubmit);
+  document.getElementById('change-password-btn').addEventListener('click', handleChangePassword);
   document.getElementById('logout-btn').addEventListener('click', handleLogout);
   
   // Dashboard Sub-Tabs
@@ -1042,6 +1043,61 @@ function handleLogout() {
   clearUserSession();
   updateHeaderLoginStatus();
   switchView('home');
+}
+
+async function handleChangePassword() {
+  if (!isLoggedIn()) return;
+  
+  const currentPassword = prompt("กรุณากรอกรหัสผ่านปัจจุบันของคุณเพื่อยืนยัน:");
+  if (currentPassword === null) return; // User cancelled
+  
+  const username = state.currentUser.username;
+  
+  try {
+    const { data: user, error } = await supabaseClient
+      .from('users')
+      .select('password')
+      .eq('username', username)
+      .maybeSingle();
+      
+    if (error || !user) {
+      alert("เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้งาน");
+      return;
+    }
+    
+    if (user.password !== currentPassword.trim()) {
+      alert("รหัสผ่านปัจจุบันไม่ถูกต้อง!");
+      return;
+    }
+    
+    const newPassword = prompt("กรุณากรอกรหัสผ่านใหม่ที่คุณต้องการเปลี่ยน:");
+    if (newPassword === null) return; // User cancelled
+    
+    const trimmedNew = newPassword.trim();
+    if (trimmedNew.length < 4) {
+      alert("รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร");
+      return;
+    }
+    
+    if (trimmedNew === currentPassword.trim()) {
+      alert("รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม");
+      return;
+    }
+    
+    const { error: updateError } = await supabaseClient
+      .from('users')
+      .update({ password: trimmedNew })
+      .eq('username', username);
+      
+    if (updateError) throw updateError;
+    
+    alert("เปลี่ยนรหัสผ่านของคุณเรียบร้อยแล้ว! กรุณาเข้าสู่ระบบใหม่อีกครั้งด้วยรหัสผ่านใหม่");
+    handleLogout();
+    
+  } catch (err) {
+    console.error('Error changing password:', err);
+    alert("เกิดข้อผิดพลาดในการบันทึกรหัสผ่านใหม่");
+  }
 }
 
 // ==========================================================================
