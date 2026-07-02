@@ -292,6 +292,17 @@ img {
   animation: dropdownFadeIn 0.2s ease;
 }
 
+/* Hover bridge to prevent menu from closing when mouse moves over the margin gap */
+.profile-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -0.6rem;
+  left: 0;
+  right: 0;
+  height: 0.6rem;
+  background-color: transparent;
+}
+
 .user-menu-container.logged-in:hover .profile-dropdown {
   display: block;
 }
