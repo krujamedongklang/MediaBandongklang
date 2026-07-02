@@ -1193,6 +1193,7 @@ function renderTeachersTable() {
       ? `<button class="primary-btn" onclick="approveTeacherAccount('${user.username}')" style="padding: 0.3rem 0.75rem; font-size: 0.8rem;">อนุมัติสิทธิ์</button>`
       : `<span style="font-size:0.8rem; color:var(--color-text-light); font-weight:600;">อนุญาตแล้ว</span>`;
       
+    const resetBtn = `<button class="secondary-btn" onclick="resetTeacherPassword('${user.username}', '${escapeHtml(user.fullName)}')" style="padding: 0.3rem 0.75rem; font-size: 0.8rem; border-color:rgba(59, 130, 246, 0.2); color:#2563eb;">รีเซ็ตรหัสผ่าน</button>`;
     const deleteBtn = `<button class="secondary-btn text-red" onclick="deleteTeacherAccount('${user.username}')" style="padding: 0.3rem 0.75rem; font-size: 0.8rem; border-color:rgba(239, 68, 68, 0.2);">ลบบัญชี</button>`;
     
     return `
@@ -1204,6 +1205,7 @@ function renderTeachersTable() {
         <td>
           <div class="actions-cell" style="gap:0.4rem;">
             ${approveBtn}
+            ${resetBtn}
             ${deleteBtn}
           </div>
         </td>
@@ -1243,6 +1245,33 @@ window.deleteTeacherAccount = async function(username) {
   } catch (err) {
     console.error(err);
     alert('เกิดข้อผิดพลาดในการลบข้อมูลบัญชี');
+  }
+};
+
+window.resetTeacherPassword = async function(username, fullName) {
+  const newPassword = prompt(`คุณต้องการเปลี่ยนรหัสผ่านใหม่สำหรับคุณครู "${fullName}" (${username}) ใช่หรือไม่?\nกรุณากรอกรหัสผ่านใหม่ที่ต้องการ:`);
+  
+  if (newPassword === null) return; // User cancelled
+  
+  const trimmedPassword = newPassword.trim();
+  if (trimmedPassword.length < 4) {
+    alert('รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษรขึ้นไป');
+    return;
+  }
+  
+  try {
+    const { error } = await supabaseClient
+      .from('users')
+      .update({ password: trimmedPassword })
+      .eq('username', username);
+      
+    if (error) throw error;
+    
+    alert(`เปลี่ยนรหัสผ่านสำหรับคุณครู "${fullName}" สำเร็จแล้ว!`);
+    fetchTeachersData(); // Refresh list just in case
+  } catch (err) {
+    console.error('Error resetting password:', err);
+    alert('เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน');
   }
 };
 
