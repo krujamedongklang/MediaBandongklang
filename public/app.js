@@ -1663,3 +1663,24 @@ function escapeHtml(unsafe) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+window.togglePasswordVisibility = function(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  
+  const btn = input.nextElementSibling;
+  if (!btn) return;
+  
+  const eyeOn = btn.querySelector('.eye-on-icon');
+  const eyeOff = btn.querySelector('.eye-off-icon');
+  
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (eyeOn) eyeOn.style.display = 'block';
+    if (eyeOff) eyeOff.style.display = 'none';
+  } else {
+    input.type = 'password';
+    if (eyeOn) eyeOn.style.display = 'none';
+    if (eyeOff) eyeOff.style.display = 'block';
+  }
+};
