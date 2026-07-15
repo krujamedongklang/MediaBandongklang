@@ -630,7 +630,7 @@ async function fetchTeachersData() {
   try {
     const { data, error } = await supabaseClient
       .from('users')
-      .select('*')
+      .select('username, fullName, role, status, createdAt, avatarUrl')
       .eq('role', 'teacher')
       .order('createdAt', { ascending: false });
       
@@ -1010,15 +1010,14 @@ async function handleLoginSubmit(e) {
   const password = passwordInput.value.trim();
   
   try {
-    const { data: user, error } = await supabaseClient
-      .from('users')
-      .select('*')
-      .eq('username', username)
-      .maybeSingle();
+    const { data, error } = await supabaseClient
+      .rpc('verify_user_credentials', { p_username: username, p_password: password });
       
     if (error) throw error;
     
-    if (!user || user.password !== password) {
+    const user = data && data[0];
+    
+    if (!user) {
       loginErrorMsg.innerText = 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';
       loginErrorMsg.classList.remove('hidden');
       return;
@@ -1117,18 +1116,14 @@ async function handleChangePassword() {
   const username = state.currentUser.username;
   
   try {
-    const { data: user, error } = await supabaseClient
-      .from('users')
-      .select('password')
-      .eq('username', username)
-      .maybeSingle();
+    const { data, error } = await supabaseClient
+      .rpc('verify_user_credentials', { p_username: username, p_password: currentPassword.trim() });
       
-    if (error || !user) {
-      alert("เกิดข้อผิดพลาดในการดึงข้อมูลผู้ใช้งาน");
-      return;
-    }
+    if (error) throw error;
     
-    if (user.password !== currentPassword.trim()) {
+    const user = data && data[0];
+    
+    if (!user) {
       alert("รหัสผ่านปัจจุบันไม่ถูกต้อง!");
       return;
     }
