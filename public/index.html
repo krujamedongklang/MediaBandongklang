@@ -14,6 +14,8 @@
   <link rel="stylesheet" href="style.css">
   <!-- Supabase CDN Client Library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Chart.js CDN Library -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -189,6 +191,7 @@
               <label for="sort-select">เรียงลำดับ:</label>
               <select id="sort-select">
                 <option value="newest">ใหม่ล่าสุด</option>
+                <option value="popular">🔥 สื่อยอดนิยม</option>
                 <option value="views">ยอดเข้าชมสูงสุด</option>
                 <option value="downloads">ดาวน์โหลดสูงสุด</option>
                 <option value="alphabetical">ตามชื่อ ก-ฮ</option>
@@ -200,6 +203,14 @@
           <div class="media-grid" id="media-grid">
             <!-- Rendered Dynamically -->
             <!-- Loading and Empty States go here -->
+          </div>
+
+          <!-- Pagination / Load More Button -->
+          <div class="load-more-container hidden" id="load-more-container" style="text-align: center; margin-top: 2rem;">
+            <button id="load-more-btn" class="secondary-btn" style="padding: 0.75rem 2rem; font-weight: 600; border-color: var(--color-primary); color: var(--color-primary);">
+              <span>แสดงสื่อเพิ่มเติม</span>
+              <span id="load-more-count" style="font-size: 0.8rem; opacity: 0.85; margin-left: 0.4rem;"></span>
+            </button>
           </div>
         </section>
       </div>
@@ -274,7 +285,7 @@
                 </div>
               </div>
               <div class="error-msg hidden" id="register-error-msg"></div>
-              <div class="success-msg hidden" id="register-success-msg">ส่งคำขอลงทะเบียนสำเร็จ! กรุณารอแอดมินอนุมัติใช้งาน</div>
+              <div class="success-msg hidden" id="register-success-msg">ลงทะเบียนสำเร็จ! กรุณารอแอดมินอนุมัติใช้งาน</div>
               <button type="submit" class="primary-btn w-full">ส่งคำขอลงทะเบียน</button>
             </form>
           </div>
@@ -295,7 +306,11 @@
               <p id="dashboard-user-desc" style="margin: 0.25rem 0 0 0; font-size: 0.875rem; color: var(--color-text-muted);">คุณล็อกอินเข้าใช้งานในฐานะ...</p>
             </div>
           </div>
-          <div class="header-actions">
+          <div class="header-actions" style="display: flex; gap: 0.5rem;">
+            <button id="export-csv-btn" class="secondary-btn" style="border-color: rgba(16, 185, 129, 0.3); color: #059669;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>📥 ส่งออกรายงาน (CSV/Excel)</span>
+            </button>
             <button id="add-media-btn" class="primary-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               <span>เพิ่มสื่อการสอนใหม่</span>
@@ -306,6 +321,7 @@
         <!-- Dashboard Sub-Tabs -->
         <div class="dashboard-tabs" id="dashboard-tabs-nav">
           <button class="dash-tab active" id="dash-tab-media">จัดการสื่อการสอน</button>
+          <button class="dash-tab" id="dash-tab-charts">📊 สถิติภาพรวมผู้บริหาร</button>
           <button class="dash-tab" id="dash-tab-teachers">อนุมัติบัญชีคุณครู (<span id="pending-teachers-badge">0</span>)</button>
         </div>
 
@@ -338,7 +354,28 @@
           </div>
         </div>
 
-        <!-- Section 2: Teacher Accounts Table (Only visible to admin) -->
+        <!-- Section 2: Executive Charts (Visual Analytics) -->
+        <div class="admin-table-card hidden" id="dashboard-charts-section" style="padding: 1.5rem;">
+          <div class="table-toolbar" style="margin-bottom: 1.5rem;">
+            <h3>📊 แผนภูมิสรุปภาพรวมคลังสื่อการสอนโรงเรียนบ้านดงกลาง</h3>
+          </div>
+          <div class="charts-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem;">
+            <div class="chart-card" style="background: #fafafa; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem; text-align: center;">
+              <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-main);">สัดส่วนสื่อการสอนแยกตามกลุ่มสาระการเรียนรู้</h4>
+              <div style="position: relative; height: 260px; display: flex; justify-content: center;">
+                <canvas id="subject-chart-canvas"></canvas>
+              </div>
+            </div>
+            <div class="chart-card" style="background: #fafafa; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1.25rem; text-align: center;">
+              <h4 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 1rem; color: var(--color-text-main);">สัดส่วนประเภทสื่อการสอน</h4>
+              <div style="position: relative; height: 260px; display: flex; justify-content: center;">
+                <canvas id="type-chart-canvas"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Teacher Accounts Table (Only visible to admin) -->
         <div class="admin-table-card hidden" id="dashboard-teachers-section">
           <div class="table-toolbar">
             <h3>รายการคุณครูที่ส่งคำขอ/ลงทะเบียนในระบบ</h3>
@@ -529,6 +566,9 @@
       <p>&copy; 2026 ระบบคลังสื่อการสอน โรงเรียนบ้านดงกลาง (ธนาคารกรุงเทพ ๓๑ ). พัฒนาและออกแบบสไตล์มินิมอลเพื่อการศึกษาไทย</p>
     </div>
   </footer>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" style="position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none;"></div>
 
   <!-- App Main Logic -->
   <script src="app.js" type="module"></script>

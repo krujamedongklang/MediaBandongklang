@@ -57,10 +57,17 @@ let state = {
   },
   sortBy: 'newest',
   currentView: 'home', // 'home' or 'admin'
-  currentDashboardTab: 'media', // 'media' or 'teachers'
+  currentDashboardTab: 'media', // 'media', 'charts', or 'teachers'
   selectedMediaId: null,
-  currentUser: null // { username, fullName, role }
+  currentUser: null, // { username, fullName, role }
+  currentPage: 1,
+  itemsPerPage: 12,
+  comments: {},
+  ratings: {}
 };
+
+let subjectChartInstance = null;
+let typeChartInstance = null;
 
 // ==========================================================================
 // SESSION MANAGEMENT Helpers
@@ -324,11 +331,28 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   // Dashboard Sub-Tabs
-  document.getElementById('dash-tab-media').addEventListener('click', () => switchDashboardTab('media'));
-  document.getElementById('dash-tab-teachers').addEventListener('click', () => switchDashboardTab('teachers'));
+  document.getElementById('dash-tab-media')?.addEventListener('click', () => switchDashboardTab('media'));
+  document.getElementById('dash-tab-charts')?.addEventListener('click', () => switchDashboardTab('charts'));
+  document.getElementById('dash-tab-teachers')?.addEventListener('click', () => switchDashboardTab('teachers'));
+  
+  // Export CSV Report button
+  document.getElementById('export-csv-btn')?.addEventListener('click', () => exportMediaToCSV());
+  
+  // Load More Pagination button
+  document.getElementById('load-more-btn')?.addEventListener('click', () => {
+    state.currentPage++;
+    renderCatalog();
+  });
+
+  // Sort Selector Event
+  document.getElementById('sort-select')?.addEventListener('change', (e) => {
+    state.sortBy = e.target.value;
+    state.currentPage = 1;
+    renderCatalog();
+  });
   
   // Add media button
-  document.getElementById('add-media-btn').addEventListener('click', () => openFormModal());
+  document.getElementById('add-media-btn')?.addEventListener('click', () => openFormModal());
   
   // Admin table search
   document.getElementById('admin-table-search').addEventListener('input', (e) => {
@@ -535,27 +559,37 @@ function toggleAuthTab(tab) {
   }
 }
 
-// Toggle between Media Table and Teachers List inside Admin Dashboard
+// Toggle between Media Table, Charts, and Teachers List inside Admin Dashboard
 window.switchDashboardTab = function(tab) {
   state.currentDashboardTab = tab;
   
   const mediaTabBtn = document.getElementById('dash-tab-media');
+  const chartsTabBtn = document.getElementById('dash-tab-charts');
   const teachersTabBtn = document.getElementById('dash-tab-teachers');
+  
   const mediaSection = document.getElementById('dashboard-media-section');
+  const chartsSection = document.getElementById('dashboard-charts-section');
   const teachersSection = document.getElementById('dashboard-teachers-section');
   
-  mediaTabBtn.classList.remove('active');
-  teachersTabBtn.classList.remove('active');
-  mediaSection.classList.add('hidden');
-  teachersSection.classList.add('hidden');
+  if (mediaTabBtn) mediaTabBtn.classList.remove('active');
+  if (chartsTabBtn) chartsTabBtn.classList.remove('active');
+  if (teachersTabBtn) teachersTabBtn.classList.remove('active');
+  
+  if (mediaSection) mediaSection.classList.add('hidden');
+  if (chartsSection) chartsSection.classList.add('hidden');
+  if (teachersSection) teachersSection.classList.add('hidden');
   
   if (tab === 'media') {
-    mediaTabBtn.classList.add('active');
-    mediaSection.classList.remove('hidden');
+    if (mediaTabBtn) mediaTabBtn.classList.add('active');
+    if (mediaSection) mediaSection.classList.remove('hidden');
     renderAdminTable();
+  } else if (tab === 'charts') {
+    if (chartsTabBtn) chartsTabBtn.classList.add('active');
+    if (chartsSection) chartsSection.classList.remove('hidden');
+    renderAdminCharts();
   } else {
-    teachersTabBtn.classList.add('active');
-    teachersSection.classList.remove('hidden');
+    if (teachersTabBtn) teachersTabBtn.classList.add('active');
+    if (teachersSection) teachersSection.classList.remove('hidden');
     renderTeachersTable();
   }
 };
@@ -620,6 +654,7 @@ async function fetchMediaData() {
     renderFilters();
     renderCatalog();
     renderAdminTable();
+    checkUrlForSharedMedia();
   } catch (err) {
     console.error('Error fetching media data:', err);
   }
@@ -798,8 +833,13 @@ function renderCatalog() {
   const countLabel = document.getElementById('results-count');
   if (countLabel) countLabel.innerText = `พบสื่อทั้งหมด ${filtered.length} รายการ`;
   
+  // Calculate popular scores
+  const getPopularScore = (item) => (item.views || 0) + (item.downloads || 0) * 2;
+  
   filtered.sort((a, b) => {
-    if (state.sortBy === 'views') {
+    if (state.sortBy === 'popular') {
+      return getPopularScore(b) - getPopularScore(a);
+    } else if (state.sortBy === 'views') {
       return (b.views || 0) - (a.views || 0);
     } else if (state.sortBy === 'downloads') {
       return (b.downloads || 0) - (a.downloads || 0);
@@ -810,6 +850,9 @@ function renderCatalog() {
     }
   });
   
+  const loadMoreContainer = document.getElementById('load-more-container');
+  const loadMoreCount = document.getElementById('load-more-count');
+  
   if (filtered.length === 0) {
     catalogGrid.innerHTML = `
       <div class="empty-state">
@@ -818,12 +861,28 @@ function renderCatalog() {
         <p>ลองปรับฟิลเตอร์ตัวกรอง หรือตรวจสอบคำค้นหาใหม่อีกครั้ง</p>
       </div>
     `;
+    if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
     return;
   }
   
-  catalogGrid.innerHTML = filtered.map(item => {
+  // Pagination slicing
+  const visibleItems = filtered.slice(0, state.currentPage * state.itemsPerPage);
+  
+  if (loadMoreContainer) {
+    if (filtered.length > visibleItems.length) {
+      loadMoreContainer.classList.remove('hidden');
+      if (loadMoreCount) loadMoreCount.innerText = `(เหลืออีก ${filtered.length - visibleItems.length} รายการ)`;
+    } else {
+      loadMoreContainer.classList.add('hidden');
+    }
+  }
+  
+  catalogGrid.innerHTML = visibleItems.map(item => {
     const color = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
     const coverHtml = getCoverHtml(item);
+    const popularScore = getPopularScore(item);
+    const isPopular = popularScore >= 5;
+    const ratingInfo = state.ratings[item.id];
     
     return `
       <article class="media-card" onclick="openDetailModal('${item.id}')">
@@ -832,6 +891,7 @@ function renderCatalog() {
           <div class="media-card-badges">
             <span class="badge" style="background-color: ${color}">${item.subject}</span>
             <span class="badge badge-level">${item.level}</span>
+            ${isPopular ? `<span class="badge-popular">🔥 ยอดนิยม</span>` : ''}
           </div>
           <span class="badge-type">${item.type}</span>
         </div>
@@ -852,6 +912,11 @@ function renderCatalog() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <span>${item.downloads || 0} โหลด</span>
           </div>
+          ${ratingInfo ? `
+            <div class="stat-item" style="color: #f59e0b; font-weight: 600;">
+              ⭐ <span>${ratingInfo.avg}</span>
+            </div>
+          ` : ''}
         </div>
       </article>
     `;
@@ -879,10 +944,11 @@ function getCoverHtml(item) {
 // ==========================================================================
 // MEDIA DETAIL MODAL VIEW
 // ==========================================================================
-window.openDetailModal = function(mediaId) {
+window.openDetailModal = async function(mediaId) {
   state.selectedMediaId = mediaId;
-  renderDetailModalContent(mediaId);
   document.getElementById('detail-modal').classList.add('open');
+  await fetchMediaComments(mediaId);
+  renderDetailModalContent(mediaId);
   incrementViewCount(mediaId);
 };
 
@@ -944,6 +1010,9 @@ function renderDetailModalContent(mediaId) {
   const color = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
   const coverHtml = getCoverHtml(item);
   const downloadText = item.sourceType === 'upload' ? 'ดาวน์โหลดสื่อ (.pdf/.mp4...)' : 'ไปยังลิงก์ปลายทางสื่อ';
+  const playerHtml = getMediaInlinePlayerHtml(item);
+  const mediaComments = state.comments[mediaId] || [];
+  const ratingInfo = state.ratings[mediaId];
   
   container.innerHTML = `
     <div class="detail-grid">
@@ -955,6 +1024,7 @@ function renderDetailModalContent(mediaId) {
           <span class="badge" style="background-color: ${color}">${item.subject}</span>
           <span class="badge badge-level">${item.level}</span>
           <span class="badge" style="background-color: #374151">${item.type}</span>
+          ${ratingInfo ? `<span class="badge" style="background-color: #f59e0b; color: white;">⭐ ${ratingInfo.avg} (${ratingInfo.count} รีวิว)</span>` : ''}
         </div>
         
         <h2 class="detail-title">${escapeHtml(item.title)}</h2>
@@ -975,16 +1045,23 @@ function renderDetailModalContent(mediaId) {
           </div>
         </div>
 
+        <!-- Inline Video/Audio Player -->
+        ${playerHtml}
+
         <p style="font-size:0.8rem; font-weight:600; color:var(--color-text-muted); margin-bottom:-0.25rem;">รายละเอียดสื่อการสอน:</p>
         <div class="detail-description-box">
           ${escapeHtml(item.description || 'ไม่มีคำอธิบายเพิ่มเติมเกี่ยวกับสื่อการเรียนรู้นี้')}
         </div>
 
-        <div class="detail-actions">
+        <div class="detail-actions" style="flex-wrap: wrap;">
           <a href="${item.fileUrl}" target="_blank" class="primary-btn" onclick="incrementDownloadCount('${item.id}')">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             <span>${downloadText}</span>
           </a>
+          <button type="button" class="secondary-btn" onclick="copyShareLink('${item.id}')" style="border-color: rgba(59, 130, 246, 0.4); color: var(--color-primary);">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+            <span>🔗 คัดลอกลิงก์แชร์</span>
+          </button>
           ${item.sourceType === 'upload' && item.fileUrl.endsWith('.pdf') ? `
             <a href="${item.fileUrl}" target="_blank" class="secondary-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -992,6 +1069,52 @@ function renderDetailModalContent(mediaId) {
             </a>
           ` : ''}
         </div>
+
+        <!-- Comments and Ratings Section -->
+        <div class="comments-section">
+          <h4>
+            <span>💬 ความคิดเห็นและรีวิว (${mediaComments.length})</span>
+            ${ratingInfo ? `<span style="font-size: 0.85rem; color: #f59e0b;">⭐ ${ratingInfo.avg} / 5</span>` : ''}
+          </h4>
+
+          <form class="comment-form" onsubmit="event.preventDefault(); submitMediaComment('${item.id}');">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: var(--color-text-main);">ให้คะแนนดาวสื่อการสอนนี้:</span>
+              <select id="comment-selected-rating" style="padding: 0.3rem 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: 0.85rem; background-color: white;">
+                <option value="5">⭐⭐⭐⭐⭐ (5/5 ดีเยี่ยม)</option>
+                <option value="4">⭐⭐⭐⭐ (4/5 ดีมาก)</option>
+                <option value="3">⭐⭐⭐ (3/5 ปานกลาง)</option>
+                <option value="2">⭐⭐ (2/5 พอใช้)</option>
+                <option value="1">⭐ (1/5 ปรับปรุง)</option>
+              </select>
+            </div>
+            <textarea id="comment-input-text" rows="2" placeholder="พิมพ์ข้อความแลกเปลี่ยนเรียนรู้ หรือข้อเสนอแนะเกี่ยวกับสื่อนี้..." required style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--color-border); font-size: 0.85rem; resize: vertical; width: 100%; box-sizing: border-box; outline: none;"></textarea>
+            <div style="display: flex; justify-content: flex-end;">
+              <button type="submit" class="primary-btn" style="padding: 0.4rem 1rem; font-size: 0.8rem;">ส่งความคิดเห็น</button>
+            </div>
+          </form>
+
+          <div class="comments-list">
+            ${mediaComments.length === 0 ? `
+              <p style="font-size: 0.8rem; color: var(--color-text-muted); text-align: center; margin: 1rem 0;">ยังไม่มีความคิดเห็น ร่วมแสดงความคิดเห็นเป็นคนแรก!</p>
+            ` : mediaComments.map(c => `
+              <div class="comment-card">
+                <div class="comment-avatar">
+                  ${c.author_name ? c.author_name.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div class="comment-content">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span class="comment-author-name">${escapeHtml(c.author_name)}</span>
+                    <span style="font-size: 0.75rem; color: #f59e0b;">${'⭐'.repeat(c.rating || 5)}</span>
+                  </div>
+                  <div class="comment-text">${escapeHtml(c.comment_text)}</div>
+                  <span class="comment-date">${new Date(c.created_at).toLocaleString('th-TH')}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
       </div>
     </div>
   `;
@@ -1679,3 +1802,270 @@ window.togglePasswordVisibility = function(inputId) {
     if (eyeOff) eyeOff.style.display = 'block';
   }
 };
+
+// ==========================================================================
+// NEW FEATURE HELPERS: TOAST, SHARE, EXPORT, CHARTS, COMMENTS, PLAYERS
+// ==========================================================================
+window.showToast = function(msg, icon = '✅') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  const toast = document.createElement('div');
+  toast.className = 'toast-msg';
+  toast.innerHTML = `<span>${icon}</span> <span>${msg}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(1rem)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 2500);
+};
+
+window.copyShareLink = function(mediaId) {
+  const shareUrl = `${window.location.origin}${window.location.pathname}?media=${mediaId}`;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      showToast('คัดลอกลิงก์แชร์สื่อเรียบร้อยแล้ว!', '🔗');
+    }).catch(() => {
+      prompt('คัดลอกลิงก์นี้เพื่อแชร์:', shareUrl);
+    });
+  } else {
+    prompt('คัดลอกลิงก์นี้เพื่อแชร์:', shareUrl);
+  }
+};
+
+function checkUrlForSharedMedia() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const mediaId = urlParams.get('media');
+  if (mediaId && state.media.some(m => m.id === mediaId)) {
+    setTimeout(() => {
+      openDetailModal(mediaId);
+    }, 400);
+  }
+}
+
+window.exportMediaToCSV = function() {
+  if (!isUserAdmin()) return;
+  
+  if (!state.media || state.media.length === 0) {
+    alert('ไม่มีข้อมูลสื่อการสอนสำหรับส่งออก');
+    return;
+  }
+  
+  const headers = ['ไอดีสื่อ', 'ชื่อสื่อการสอน', 'กลุ่มสาระการเรียนรู้', 'ระดับชั้น', 'ประเภทสื่อ', 'ผู้ผลิตสื่อ/ครูผู้สอน', 'ประเภทแหล่งที่มา', 'ที่อยู่ไฟล์/ลิงก์', 'จำนวนเข้าชม', 'จำนวนดาวน์โหลด', 'วันที่สร้าง'];
+  
+  const rows = state.media.map(m => [
+    `"${(m.id || '').replace(/"/g, '""')}"`,
+    `"${(m.title || '').replace(/"/g, '""')}"`,
+    `"${(m.subject || '').replace(/"/g, '""')}"`,
+    `"${(m.level || '').replace(/"/g, '""')}"`,
+    `"${(m.type || '').replace(/"/g, '""')}"`,
+    `"${(m.author || '').replace(/"/g, '""')}"`,
+    `"${(m.sourceType || '').replace(/"/g, '""')}"`,
+    `"${(m.fileUrl || '').replace(/"/g, '""')}"`,
+    m.views || 0,
+    m.downloads || 0,
+    `"${new Date(m.createdAt).toLocaleString('th-TH')}"`
+  ]);
+  
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `รายงานสถิติสื่อการสอน_โรงเรียนบ้านดงกลาง_${new Date().toISOString().slice(0,10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast('ส่งออกรายงาน CSV เรียบร้อยแล้ว!', '📥');
+};
+
+function renderAdminCharts() {
+  if (!isUserAdmin() || typeof Chart === 'undefined') return;
+  
+  const subjectCanvas = document.getElementById('subject-chart-canvas');
+  const typeCanvas = document.getElementById('type-chart-canvas');
+  if (!subjectCanvas || !typeCanvas) return;
+  
+  const subjectCounts = {};
+  state.subjects.forEach(s => subjectCounts[s] = 0);
+  state.media.forEach(m => {
+    if (subjectCounts[m.subject] !== undefined) {
+      subjectCounts[m.subject]++;
+    } else {
+      subjectCounts[m.subject] = 1;
+    }
+  });
+  
+  const typeCounts = {};
+  state.types.forEach(t => typeCounts[t] = 0);
+  state.media.forEach(m => {
+    if (typeCounts[m.type] !== undefined) {
+      typeCounts[m.type]++;
+    } else {
+      typeCounts[m.type] = 1;
+    }
+  });
+  
+  if (subjectChartInstance) subjectChartInstance.destroy();
+  if (typeChartInstance) typeChartInstance.destroy();
+  
+  subjectChartInstance = new Chart(subjectCanvas, {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(subjectCounts),
+      datasets: [{
+        data: Object.values(subjectCounts),
+        backgroundColor: [
+          '#3b82f6', '#8b5cf6', '#f97316', '#ec4899', '#0d9488', '#10b981', '#d97706', '#78350f'
+        ]
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: 'Sarabun', size: 11 } } }
+      }
+    }
+  });
+  
+  typeChartInstance = new Chart(typeCanvas, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(typeCounts),
+      datasets: [{
+        label: 'จำนวนสื่อ (รายการ)',
+        data: Object.values(typeCounts),
+        backgroundColor: '#3b82f6',
+        borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 } },
+        x: { ticks: { font: { family: 'Sarabun', size: 11 } } }
+      }
+    }
+  });
+}
+
+async function fetchMediaComments(mediaId) {
+  try {
+    const { data, error } = await supabaseClient
+      .from('media_comments')
+      .select('*')
+      .eq('media_id', mediaId)
+      .order('created_at', { ascending: false });
+      
+    if (!error && data) {
+      state.comments[mediaId] = data;
+      if (data.length > 0) {
+        const sum = data.reduce((acc, c) => acc + (c.rating || 5), 0);
+        state.ratings[mediaId] = {
+          avg: (sum / data.length).toFixed(1),
+          count: data.length
+        };
+      } else {
+        state.ratings[mediaId] = null;
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching comments:', err);
+  }
+}
+
+window.submitMediaComment = async function(mediaId) {
+  const input = document.getElementById('comment-input-text');
+  const text = input ? input.value.trim() : '';
+  const selectedRating = parseInt(document.getElementById('comment-selected-rating')?.value || '5', 10);
+  
+  if (!text) {
+    alert('กรุณากรอกข้อความความคิดเห็นก่อนส่ง');
+    return;
+  }
+  
+  const authorName = isLoggedIn() ? state.currentUser.fullName : 'คุณครู / ผู้เยี่ยมชม';
+  const authorAvatar = isLoggedIn() ? (state.currentUser.avatarUrl || '') : '';
+  
+  try {
+    const { error } = await supabaseClient
+      .from('media_comments')
+      .insert({
+        media_id: mediaId,
+        author_name: authorName,
+        author_avatar: authorAvatar,
+        rating: selectedRating,
+        comment_text: text
+      });
+      
+    if (error) throw error;
+    
+    showToast('บันทึกความคิดเห็นเรียบร้อยแล้ว!', '⭐');
+    await fetchMediaComments(mediaId);
+    renderDetailModalContent(mediaId);
+    renderCatalog();
+  } catch (err) {
+    console.error('Error submitting comment:', err);
+    alert('เกิดข้อผิดพลาดในการบันทึกความคิดเห็น');
+  }
+};
+
+function getYouTubeEmbedUrl(url) {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+}
+
+function getMediaInlinePlayerHtml(item) {
+  if (item.fileUrl) {
+    const ytEmbed = getYouTubeEmbedUrl(item.fileUrl);
+    if (ytEmbed) {
+      return `
+        <div class="media-player-wrapper">
+          <div class="video-responsive">
+            <iframe src="${ytEmbed}" allowfullscreen title="${escapeHtml(item.title)}"></iframe>
+          </div>
+        </div>
+      `;
+    }
+    
+    const urlLower = item.fileUrl.toLowerCase();
+    if (urlLower.endsWith('.mp4') || urlLower.endsWith('.webm') || item.type === 'วิดีโอ') {
+      if (item.fileUrl.startsWith('http') || item.fileUrl.startsWith('/')) {
+        return `
+          <div class="media-player-wrapper">
+            <div class="video-responsive">
+              <video controls poster="${item.coverUrl || ''}">
+                <source src="${item.fileUrl}">
+                เบราว์เซอร์ของคุณไม่รองรับการเล่นวิดีโอ
+              </video>
+            </div>
+          </div>
+        `;
+      }
+    }
+    
+    if (urlLower.endsWith('.mp3') || urlLower.endsWith('.wav') || item.type === 'เสียง') {
+      if (item.fileUrl.startsWith('http') || item.fileUrl.startsWith('/')) {
+        return `
+          <div class="media-player-wrapper">
+            <div class="audio-player-wrapper">
+              <span style="font-size:0.85rem; font-weight:600; color:var(--color-text-main);">🎧 เล่นไฟล์เสียงสื่อการสอน:</span>
+              <audio controls src="${item.fileUrl}">
+                เบราว์เซอร์ของคุณไม่รองรับการเล่นไฟล์เสียง
+              </audio>
+            </div>
+          </div>
+        `;
+      }
+    }
+  }
+  return '';
+}
