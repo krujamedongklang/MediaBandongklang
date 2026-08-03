@@ -63,7 +63,8 @@ let state = {
   currentPage: 1,
   itemsPerPage: 12,
   comments: {},
-  ratings: {}
+  ratings: {},
+  selectedUploadFiles: []
 };
 
 let subjectChartInstance = null;
@@ -369,36 +370,64 @@ document.addEventListener('DOMContentLoaded', () => {
   // File labels helpers
   setupFileLabelHelper('form-cover-file', 'cover-file-name-indicator', 'เลือกภาพหน้าปก (.jpg, .png)');
   const mediaInput = document.getElementById('form-media-file');
-  const mediaLabel = document.getElementById('media-file-name-indicator');
-  const filesContainer = document.getElementById('selected-files-container');
   if (mediaInput) {
     mediaInput.addEventListener('change', (e) => {
-      const files = e.target.files;
-      if (filesContainer) filesContainer.innerHTML = '';
+      const files = Array.from(e.target.files);
       if (files && files.length > 0) {
-        if (mediaLabel) mediaLabel.innerText = `เลือกแล้วทั้งหมด ${files.length} ไฟล์`;
-        if (filesContainer) {
-          Array.from(files).forEach((f, idx) => {
-            const item = document.createElement('div');
-            item.className = 'attachment-card';
-            item.style.padding = '0.4rem 0.75rem';
-            item.innerHTML = `
-              <div class="attachment-info">
-                <div class="attachment-icon" style="width:26px; height:26px; font-size:0.7rem;">${f.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'FILE'}</div>
-                <span class="attachment-name" style="font-size:0.8rem;">${escapeHtml(f.name)} (${(f.size / (1024 * 1024)).toFixed(2)} MB)</span>
-              </div>
-              <span style="font-size:0.75rem; color:var(--color-primary); font-weight:600;">ไฟล์ที่ ${idx + 1}</span>
-            `;
-            filesContainer.appendChild(item);
-          });
-        }
-      } else {
-        if (mediaLabel) mediaLabel.innerText = 'เลือกไฟล์สื่อการสอน';
-        if (filesContainer) filesContainer.innerHTML = '';
+        if (!state.selectedUploadFiles) state.selectedUploadFiles = [];
+        state.selectedUploadFiles.push(...files);
+        renderSelectedUploadFilesList();
+        e.target.value = ''; // Reset input so user can click and select more files if desired
       }
     });
   }
 });
+
+function renderSelectedUploadFilesList() {
+  const container = document.getElementById('selected-files-container');
+  const label = document.getElementById('media-file-name-indicator');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  if (state.selectedUploadFiles && state.selectedUploadFiles.length > 0) {
+    if (label) label.innerText = `เลือกแล้วทั้งหมด ${state.selectedUploadFiles.length} ไฟล์ (กดที่กล่องเพื่อเลือกเพิ่มได้)`;
+    
+    state.selectedUploadFiles.forEach((file, idx) => {
+      const item = document.createElement('div');
+      item.className = 'attachment-card';
+      item.style.padding = '0.5rem 0.75rem';
+      
+      const fileExt = (file.name || '').split('.').pop().toLowerCase();
+      const extLabel = fileExt === 'pdf' ? 'PDF' : fileExt.toUpperCase().slice(0, 4);
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      
+      item.innerHTML = `
+        <div class="attachment-info">
+          <div class="attachment-icon" style="width:28px; height:28px; font-size:0.7rem;">${extLabel}</div>
+          <div style="display: flex; flex-direction: column; overflow: hidden;">
+            <span class="attachment-name" style="font-size:0.82rem; font-weight:600;">${escapeHtml(file.name)}</span>
+            <span style="font-size:0.72rem; color:var(--color-text-muted);">${sizeMb} MB</span>
+          </div>
+        </div>
+        <button type="button" class="secondary-btn text-red" style="padding: 0.25rem 0.65rem; font-size: 0.75rem; border-color: rgba(239,68,68,0.3); border-radius: var(--radius-round); flex-shrink: 0;" onclick="removeSelectedUploadFile(${idx})">
+          ✕ ลบออก
+        </button>
+      `;
+      container.appendChild(item);
+    });
+  } else {
+    if (label) label.innerText = 'เลือกไฟล์สื่อการสอน';
+    container.innerHTML = `<p style="font-size:0.78rem; color:var(--color-text-muted); font-style:italic;">ยังไม่มีไฟล์ที่เลือก (สามารถเลือกหลายไฟล์พร้อมกันได้)</p>`;
+  }
+}
+
+window.removeSelectedUploadFile = function(index) {
+  if (state.selectedUploadFiles && index >= 0 && index < state.selectedUploadFiles.length) {
+    state.selectedUploadFiles.splice(index, 1);
+    renderSelectedUploadFilesList();
+  }
+};
 
 // File upload custom labels helper
 function setupFileLabelHelper(inputId, labelId, defaultText) {
@@ -1681,9 +1710,10 @@ window.resetTeacherPassword = async function(username, fullName) {
 window.openFormModal = function(mediaId = null) {
   const form = document.getElementById('media-upload-form');
   form.reset();
+  state.selectedUploadFiles = [];
+  renderSelectedUploadFilesList();
   
   document.getElementById('cover-file-name-indicator').innerText = '';
-  document.getElementById('media-file-name-indicator').innerText = '';
   
   document.getElementById('form-author').value = state.currentUser.fullName;
   
@@ -1717,6 +1747,8 @@ window.openFormModal = function(mediaId = null) {
 };
 
 function closeFormModal() {
+  state.selectedUploadFiles = [];
+  renderSelectedUploadFilesList();
   document.getElementById('form-modal').classList.remove('open');
 }
 
@@ -1775,12 +1807,11 @@ async function handleFormSubmit(e) {
       }
       finalFileUrl = linkVal;
     } else {
-      const fileInput = document.getElementById('form-media-file');
-      if (fileInput.files.length > 0) {
+      if (state.selectedUploadFiles && state.selectedUploadFiles.length > 0) {
         uploadedAttachments = [];
-        for (let i = 0; i < fileInput.files.length; i++) {
-          const file = fileInput.files[i];
-          submitBtn.innerText = `กำลังอัปโหลดไฟล์ ${i + 1}/${fileInput.files.length}...`;
+        for (let i = 0; i < state.selectedUploadFiles.length; i++) {
+          const file = state.selectedUploadFiles[i];
+          submitBtn.innerText = `กำลังอัปโหลดไฟล์ ${i + 1}/${state.selectedUploadFiles.length}...`;
           const url = await uploadFileToSupabase(file, 'mediaFile');
           uploadedAttachments.push({
             name: file.name,
@@ -1790,7 +1821,7 @@ async function handleFormSubmit(e) {
         }
         finalFileUrl = uploadedAttachments[0].url;
         originalName = uploadedAttachments[0].name;
-      } else if (!isEdit) {
+      } else if (!isEdit || (!finalFileUrl && (!existingItem || !existingItem.fileUrl))) {
         throw new Error('กรุณาเลือกไฟล์สื่อการสอนที่จะอัปโหลดอย่างน้อย 1 ไฟล์');
       }
     }
