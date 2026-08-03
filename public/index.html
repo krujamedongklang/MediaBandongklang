@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
   <!-- Stylesheet -->
-  <link rel="stylesheet" href="style.css?v=1.0.5">
+  <link rel="stylesheet" href="style.css?v=1.0.6">
   <!-- Supabase CDN Client Library -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Chart.js CDN Library -->
@@ -486,15 +486,15 @@
             <div class="radio-group" style="display: flex; flex-direction: column; gap: 0.5rem;">
               <label class="radio-label">
                 <input type="radio" name="form-source-type" value="upload" checked id="radio-source-upload">
-                <span>📁 อัปโหลดไฟล์สื่อการสอน / ใบงาน PDF (แนบได้หลายไฟล์)</span>
+                <span>📁 อัปโหลดไฟล์สื่อ (PDF/เอกสาร)</span>
               </label>
               <label class="radio-label">
                 <input type="radio" name="form-source-type" value="combo" id="radio-source-combo">
-                <span>🎬 ลิงก์วิดีโอสอน (YouTube) + 📝 แนบใบงาน PDF ประกอบ</span>
+                <span>🎬 วิดีโอสอน + ใบงาน PDF</span>
               </label>
               <label class="radio-label">
                 <input type="radio" name="form-source-type" value="link" id="radio-source-link">
-                <span>🔗 ลิงก์ภายนอกเท่านั้น (YouTube / Google Drive)</span>
+                <span>🔗 ลิงก์ภายนอก (YouTube/Drive)</span>
               </label>
             </div>
           </div>
@@ -507,12 +507,12 @@
         </div>
 
         <div class="form-group" id="file-upload-group">
-          <label>อัปโหลดไฟล์สื่อการสอน / ใบงานประกอบ <span style="font-size:0.8rem; font-weight:normal; color:var(--color-primary);">(อัปโหลด 1 ไฟล์ หรือหลายไฟล์ก็ได้ ไม่จำกัดจำนวน)</span></label>
+          <label>อัปโหลดไฟล์สื่อ / ใบงาน <span style="font-size:0.8rem; font-weight:normal; color:var(--color-primary);">(กี่ไฟล์ก็ได้ ไม่จำกัด)</span></label>
           <div class="file-upload-wrapper">
             <input type="file" id="form-media-file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mp3,.zip,.png,.jpg,.jpeg,.webp">
             <div class="file-upload-placeholder" id="media-file-placeholder">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              <span>กดที่นี่เพื่อเลือกไฟล์สื่อการสอน (อัปโหลด 1 ไฟล์ หรือเลือกหลายไฟล์พร้อมกันก็ได้)</span>
+              <span>กดที่นี่เพื่อเลือกไฟล์สื่อ / ใบงาน (เลือกกี่ไฟล์ก็ได้)</span>
             </div>
           </div>
           <span class="file-name-indicator" id="media-file-name-indicator"></span>
@@ -576,6 +576,6 @@
   <div id="toast-container" style="position: fixed; bottom: 2rem; right: 2rem; z-index: 9999; display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none;"></div>
 
   <!-- App Main Logic -->
-  <script src="app.js?v=1.0.5" type="module"></script>
+  <script src="app.js?v=1.0.6" type="module"></script>
 </body>
 </html>
