@@ -1265,15 +1265,26 @@ async function handleChangePassword() {
       return;
     }
     
-    const { error: updateError } = await supabaseClient
-      .from('users')
-      .update({ password: trimmedNew })
-      .eq('username', username);
+    let success = false;
+    const { data: rpcResult, error: rpcError } = await supabaseClient
+      .rpc('update_user_password', { p_username: username, p_new_password: trimmedNew });
       
-    if (updateError) throw updateError;
+    if (!rpcError && (rpcResult === true || rpcResult === 1)) {
+      success = true;
+    } else {
+      const { error: directError } = await supabaseClient
+        .from('users')
+        .update({ password: trimmedNew })
+        .ilike('username', username);
+        
+      if (directError) throw directError;
+      success = true;
+    }
     
-    alert("เปลี่ยนรหัสผ่านของคุณเรียบร้อยแล้ว! กรุณาเข้าสู่ระบบใหม่อีกครั้งด้วยรหัสผ่านใหม่");
-    handleLogout();
+    if (success) {
+      alert("เปลี่ยนรหัสผ่านของคุณเรียบร้อยแล้ว! กรุณาเข้าสู่ระบบใหม่อีกครั้งด้วยรหัสผ่านใหม่");
+      handleLogout();
+    }
     
   } catch (err) {
     console.error('Error changing password:', err);
@@ -1577,18 +1588,31 @@ window.resetTeacherPassword = async function(username, fullName) {
   }
   
   try {
-    const { error } = await supabaseClient
-      .from('users')
-      .update({ password: trimmedPassword })
-      .eq('username', username);
+    // Try RPC function first
+    let success = false;
+    const { data: rpcResult, error: rpcError } = await supabaseClient
+      .rpc('update_user_password', { p_username: username, p_new_password: trimmedPassword });
       
-    if (error) throw error;
+    if (!rpcError && (rpcResult === true || rpcResult === 1)) {
+      success = true;
+    } else {
+      // Fallback to direct update if RPC is not yet created
+      const { error: directError } = await supabaseClient
+        .from('users')
+        .update({ password: trimmedPassword })
+        .ilike('username', username);
+        
+      if (directError) throw directError;
+      success = true;
+    }
     
-    alert(`เปลี่ยนรหัสผ่านสำหรับคุณครู "${fullName}" สำเร็จแล้ว!`);
-    fetchTeachersData(); // Refresh list just in case
+    if (success) {
+      alert(`✅ เปลี่ยนรหัสผ่านสำเร็จแล้ว!\n\n------------------------------\n👤 คุณครู: ${fullName}\n🆔 ชื่อผู้ใช้ (Username): ${username}\n🔑 รหัสผ่านใหม่ (New Password): ${trimmedPassword}\n------------------------------\n\nกรุณาแจ้งชื่อผู้ใช้และรหัสผ่านใหม่นี้ให้คุณครูเพื่อเข้าสู่ระบบได้ทันทีครับ!`);
+      fetchTeachersData(); // Refresh list
+    }
   } catch (err) {
     console.error('Error resetting password:', err);
-    alert('เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน');
+    alert('เกิดข้อผิดพลาดในการเปลี่ยนรหัสผ่าน กรุณารันคำสั่ง SQL ใน Supabase แล้วลองอีกครั้ง');
   }
 };
 
