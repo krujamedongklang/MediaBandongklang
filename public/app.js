@@ -361,8 +361,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   // Media source radio toggles
-  document.getElementById('radio-source-link').addEventListener('change', toggleSourceFields);
-  document.getElementById('radio-source-upload').addEventListener('change', toggleSourceFields);
+  document.getElementById('radio-source-link')?.addEventListener('change', toggleSourceFields);
+  document.getElementById('radio-source-upload')?.addEventListener('change', toggleSourceFields);
+  document.getElementById('radio-source-combo')?.addEventListener('change', toggleSourceFields);
   
   // Form submission
   document.getElementById('media-upload-form').addEventListener('submit', handleFormSubmit);
@@ -391,7 +392,11 @@ function renderSelectedUploadFilesList() {
   container.innerHTML = '';
   
   if (state.selectedUploadFiles && state.selectedUploadFiles.length > 0) {
-    if (label) label.innerText = `เลือกแล้วทั้งหมด ${state.selectedUploadFiles.length} ไฟล์ (กดที่กล่องเพื่อเลือกเพิ่มได้)`;
+    if (label) {
+      label.innerText = state.selectedUploadFiles.length === 1 
+        ? `เลือกแล้ว 1 ไฟล์ (พร้อมอัปโหลด - คลิกเพิ่มอีกได้)`
+        : `เลือกแล้วทั้งหมด ${state.selectedUploadFiles.length} ไฟล์ (พร้อมอัปโหลด - คลิกเพิ่มอีกได้)`;
+    }
     
     state.selectedUploadFiles.forEach((file, idx) => {
       const item = document.createElement('div');
@@ -417,8 +422,8 @@ function renderSelectedUploadFilesList() {
       container.appendChild(item);
     });
   } else {
-    if (label) label.innerText = 'เลือกไฟล์สื่อการสอน';
-    container.innerHTML = `<p style="font-size:0.78rem; color:var(--color-text-muted); font-style:italic;">ยังไม่มีไฟล์ที่เลือก (สามารถเลือกหลายไฟล์พร้อมกันได้)</p>`;
+    if (label) label.innerText = 'เลือกไฟล์สื่อการสอน / ใบงาน';
+    container.innerHTML = `<p style="font-size:0.78rem; color:var(--color-text-muted); font-style:italic;">ยังไม่มีไฟล์ที่เลือก (เลือก 1 ไฟล์ หรือหลายไฟล์ก็ได้ ไม่จำกัดจำนวน)</p>`;
   }
 }
 
@@ -446,20 +451,24 @@ function setupFileLabelHelper(inputId, labelId, defaultText) {
 
 // Toggle URL vs File upload form fields
 function toggleSourceFields() {
-  const isUpload = document.getElementById('radio-source-upload').checked;
+  const radioUpload = document.getElementById('radio-source-upload');
+  const radioCombo = document.getElementById('radio-source-combo');
+  const radioLink = document.getElementById('radio-source-link');
+  
   const urlGroup = document.getElementById('url-input-group');
   const fileGroup = document.getElementById('file-upload-group');
   
   const fileUrlInput = document.getElementById('form-file-url');
   const mediaFileInput = document.getElementById('form-media-file');
   
-  if (isUpload) {
+  if (radioUpload && radioUpload.checked) {
     urlGroup.classList.add('hidden');
     fileGroup.classList.remove('hidden');
     fileUrlInput.removeAttribute('required');
-    if (!document.getElementById('form-media-id').value) {
-      mediaFileInput.setAttribute('required', 'required');
-    }
+  } else if (radioCombo && radioCombo.checked) {
+    urlGroup.classList.remove('hidden');
+    fileGroup.classList.remove('hidden');
+    fileUrlInput.setAttribute('required', 'required');
   } else {
     urlGroup.classList.remove('hidden');
     fileGroup.classList.add('hidden');
@@ -950,7 +959,7 @@ function renderCatalog() {
             <span class="badge" style="background-color: ${color}">${item.subject}</span>
             <span class="badge badge-level">${item.level}</span>
             ${isPopular ? `<span class="badge-popular">🔥 ยอดนิยม</span>` : ''}
-            ${item.attachments && item.attachments.length > 1 ? `<span class="badge-files">📂 ${item.attachments.length} ไฟล์</span>` : ''}
+            ${item.sourceType === 'combo' ? `<span class="badge-files" style="background-color: #2563eb;">🎬 วิดีโอ + 📝 ใบงาน PDF</span>` : (item.attachments && item.attachments.length > 1 ? `<span class="badge-files">📂 ${item.attachments.length} ไฟล์</span>` : '')}
           </div>
           <span class="badge-type">${item.type}</span>
         </div>
@@ -1116,7 +1125,7 @@ function renderDetailModalContent(mediaId) {
         ${item.attachments && item.attachments.length > 0 ? `
           <div style="margin: 1rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; background-color: #f8fafc;">
             <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--color-text-main); margin-bottom: 0.75rem;">
-              📂 ไฟล์เอกสารประกอบการเรียน / สื่อการสอนในชุดนี้ (${item.attachments.length} ไฟล์)
+              📝 ใบงานและเอกสารประกอบการเรียน (${item.attachments.length} ไฟล์)
             </h4>
             <div style="display: flex; flex-direction: column; gap: 0.5rem;">
               ${item.attachments.map(att => `
@@ -1732,14 +1741,17 @@ window.openFormModal = function(mediaId = null) {
     
     if (item.sourceType === 'upload') {
       document.getElementById('radio-source-upload').checked = true;
+    } else if (item.sourceType === 'combo') {
+      document.getElementById('radio-source-combo').checked = true;
+      document.getElementById('form-file-url').value = item.fileUrl || '';
     } else {
       document.getElementById('radio-source-link').checked = true;
-      document.getElementById('form-file-url').value = item.fileUrl;
+      document.getElementById('form-file-url').value = item.fileUrl || '';
     }
   } else {
     document.getElementById('form-modal-title').innerText = 'เพิ่มสื่อการสอนเข้าระบบคลัง';
     document.getElementById('form-media-id').value = '';
-    document.getElementById('radio-source-link').checked = true;
+    document.getElementById('radio-source-upload').checked = true;
   }
   
   toggleSourceFields();
@@ -1797,15 +1809,28 @@ async function handleFormSubmit(e) {
     
     let uploadedAttachments = isEdit && existingItem && existingItem.attachments ? existingItem.attachments : [];
 
-    // 2. Process Media File / Link
+    // 2. Process Media File / Link / Combo
     if (sourceType === 'link') {
       const linkVal = document.getElementById('form-file-url').value.trim();
-      if (isEdit && existingItem && existingItem.sourceType === 'upload' && finalFileUrl && finalFileUrl.includes('supabase.co')) {
-        await deleteFileFromSupabase(finalFileUrl);
-        originalName = '';
-        uploadedAttachments = [];
-      }
       finalFileUrl = linkVal;
+    } else if (sourceType === 'combo') {
+      const linkVal = document.getElementById('form-file-url').value.trim();
+      finalFileUrl = linkVal;
+      
+      if (state.selectedUploadFiles && state.selectedUploadFiles.length > 0) {
+        uploadedAttachments = [];
+        for (let i = 0; i < state.selectedUploadFiles.length; i++) {
+          const file = state.selectedUploadFiles[i];
+          submitBtn.innerText = `กำลังอัปโหลดใบงาน/ไฟล์แนบ ${i + 1}/${state.selectedUploadFiles.length}...`;
+          const url = await uploadFileToSupabase(file, 'mediaFile');
+          uploadedAttachments.push({
+            name: file.name,
+            url: url,
+            size: file.size
+          });
+        }
+        originalName = uploadedAttachments[0].name;
+      }
     } else {
       if (state.selectedUploadFiles && state.selectedUploadFiles.length > 0) {
         uploadedAttachments = [];
