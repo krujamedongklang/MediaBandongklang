@@ -368,7 +368,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // File labels helpers
   setupFileLabelHelper('form-cover-file', 'cover-file-name-indicator', 'เลือกภาพหน้าปก (.jpg, .png)');
-  setupFileLabelHelper('form-media-file', 'media-file-name-indicator', 'เลือกไฟล์สื่อการสอน');
+  const mediaInput = document.getElementById('form-media-file');
+  const mediaLabel = document.getElementById('media-file-name-indicator');
+  const filesContainer = document.getElementById('selected-files-container');
+  if (mediaInput) {
+    mediaInput.addEventListener('change', (e) => {
+      const files = e.target.files;
+      if (filesContainer) filesContainer.innerHTML = '';
+      if (files && files.length > 0) {
+        if (mediaLabel) mediaLabel.innerText = `เลือกแล้วทั้งหมด ${files.length} ไฟล์`;
+        if (filesContainer) {
+          Array.from(files).forEach((f, idx) => {
+            const item = document.createElement('div');
+            item.className = 'attachment-card';
+            item.style.padding = '0.4rem 0.75rem';
+            item.innerHTML = `
+              <div class="attachment-info">
+                <div class="attachment-icon" style="width:26px; height:26px; font-size:0.7rem;">${f.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'FILE'}</div>
+                <span class="attachment-name" style="font-size:0.8rem;">${escapeHtml(f.name)} (${(f.size / (1024 * 1024)).toFixed(2)} MB)</span>
+              </div>
+              <span style="font-size:0.75rem; color:var(--color-primary); font-weight:600;">ไฟล์ที่ ${idx + 1}</span>
+            `;
+            filesContainer.appendChild(item);
+          });
+        }
+      } else {
+        if (mediaLabel) mediaLabel.innerText = 'เลือกไฟล์สื่อการสอน';
+        if (filesContainer) filesContainer.innerHTML = '';
+      }
+    });
+  }
 });
 
 // File upload custom labels helper
@@ -892,6 +921,7 @@ function renderCatalog() {
             <span class="badge" style="background-color: ${color}">${item.subject}</span>
             <span class="badge badge-level">${item.level}</span>
             ${isPopular ? `<span class="badge-popular">🔥 ยอดนิยม</span>` : ''}
+            ${item.attachments && item.attachments.length > 1 ? `<span class="badge-files">📂 ${item.attachments.length} ไฟล์</span>` : ''}
           </div>
           <span class="badge-type">${item.type}</span>
         </div>
@@ -1053,6 +1083,35 @@ function renderDetailModalContent(mediaId) {
           ${escapeHtml(item.description || 'ไม่มีคำอธิบายเพิ่มเติมเกี่ยวกับสื่อการเรียนรู้นี้')}
         </div>
 
+        <!-- Multi-File Attachments List Section -->
+        ${item.attachments && item.attachments.length > 0 ? `
+          <div style="margin: 1rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: 1rem; background-color: #f8fafc;">
+            <h4 style="font-size: 0.9rem; font-weight: 700; color: var(--color-text-main); margin-bottom: 0.75rem;">
+              📂 ไฟล์เอกสารประกอบการเรียน / สื่อการสอนในชุดนี้ (${item.attachments.length} ไฟล์)
+            </h4>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+              ${item.attachments.map(att => `
+                <div class="attachment-card">
+                  <div class="attachment-info">
+                    <div class="attachment-icon">${(att.name || '').toLowerCase().endsWith('.pdf') ? 'PDF' : (att.name || '').toLowerCase().endsWith('.mp4') ? 'VIDEO' : (att.name || '').toLowerCase().endsWith('.mp3') ? 'AUDIO' : 'FILE'}</div>
+                    <span class="attachment-name">${escapeHtml(att.name || 'ไฟล์แนบ')}</span>
+                  </div>
+                  <div class="attachment-actions">
+                    <a href="${att.url}" target="_blank" class="primary-btn" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;" onclick="incrementDownloadCount('${item.id}')">
+                      📥 ดาวน์โหลด
+                    </a>
+                    ${(att.name || '').toLowerCase().endsWith('.pdf') ? `
+                      <a href="${att.url}" target="_blank" class="secondary-btn" style="padding: 0.35rem 0.75rem; font-size: 0.78rem;">
+                        👁️ พรีวิว
+                      </a>
+                    ` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
         <div class="detail-actions" style="flex-wrap: wrap;">
           <a href="${item.fileUrl}" target="_blank" class="primary-btn" onclick="incrementDownloadCount('${item.id}')">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -1062,7 +1121,7 @@ function renderDetailModalContent(mediaId) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
             <span>🔗 คัดลอกลิงก์แชร์</span>
           </button>
-          ${item.sourceType === 'upload' && item.fileUrl.endsWith('.pdf') ? `
+          ${item.sourceType === 'upload' && item.fileUrl && item.fileUrl.toLowerCase().endsWith('.pdf') ? `
             <a href="${item.fileUrl}" target="_blank" class="secondary-btn">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               <span>เปิดดูไฟล์ (Preview)</span>
@@ -1704,24 +1763,35 @@ async function handleFormSubmit(e) {
       finalCoverUrl = await uploadFileToSupabase(coverInput.files[0], 'coverImage');
     }
     
+    let uploadedAttachments = isEdit && existingItem && existingItem.attachments ? existingItem.attachments : [];
+
     // 2. Process Media File / Link
     if (sourceType === 'link') {
       const linkVal = document.getElementById('form-file-url').value.trim();
       if (isEdit && existingItem && existingItem.sourceType === 'upload' && finalFileUrl && finalFileUrl.includes('supabase.co')) {
         await deleteFileFromSupabase(finalFileUrl);
         originalName = '';
+        uploadedAttachments = [];
       }
       finalFileUrl = linkVal;
     } else {
       const fileInput = document.getElementById('form-media-file');
       if (fileInput.files.length > 0) {
-        if (isEdit && existingItem && existingItem.sourceType === 'upload' && finalFileUrl && finalFileUrl.includes('supabase.co')) {
-          await deleteFileFromSupabase(finalFileUrl);
+        uploadedAttachments = [];
+        for (let i = 0; i < fileInput.files.length; i++) {
+          const file = fileInput.files[i];
+          submitBtn.innerText = `กำลังอัปโหลดไฟล์ ${i + 1}/${fileInput.files.length}...`;
+          const url = await uploadFileToSupabase(file, 'mediaFile');
+          uploadedAttachments.push({
+            name: file.name,
+            url: url,
+            size: file.size
+          });
         }
-        finalFileUrl = await uploadFileToSupabase(fileInput.files[0], 'mediaFile');
-        originalName = fileInput.files[0].name;
+        finalFileUrl = uploadedAttachments[0].url;
+        originalName = uploadedAttachments[0].name;
       } else if (!isEdit) {
-        throw new Error('กรุณาเลือกไฟล์สื่อการสอนที่จะอัปโหลด');
+        throw new Error('กรุณาเลือกไฟล์สื่อการสอนที่จะอัปโหลดอย่างน้อย 1 ไฟล์');
       }
     }
     
@@ -1737,18 +1807,26 @@ async function handleFormSubmit(e) {
         sourceType,
         fileUrl: finalFileUrl,
         fileName: originalName,
-        coverUrl: finalCoverUrl
+        coverUrl: finalCoverUrl,
+        attachments: uploadedAttachments
       };
       
-      const { error } = await supabaseClient
+      let { error } = await supabaseClient
         .from('media')
         .update(updatedMedia)
         .eq('id', mediaId);
         
+      if (error && error.message && error.message.includes('attachments')) {
+        delete updatedMedia.attachments;
+        const res = await supabaseClient.from('media').update(updatedMedia).eq('id', mediaId);
+        error = res.error;
+      }
+      
       if (error) throw error;
       
       if (existingItem) {
         Object.assign(existingItem, updatedMedia);
+        if (uploadedAttachments.length > 0) existingItem.attachments = uploadedAttachments;
       }
     } else {
       const newMedia = {
@@ -1766,15 +1844,23 @@ async function handleFormSubmit(e) {
         creatorUsername: state.currentUser.username,
         views: 0,
         downloads: 0,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        attachments: uploadedAttachments
       };
       
-      const { error } = await supabaseClient
+      let { error } = await supabaseClient
         .from('media')
         .insert(newMedia);
         
+      if (error && error.message && error.message.includes('attachments')) {
+        delete newMedia.attachments;
+        const res = await supabaseClient.from('media').insert(newMedia);
+        error = res.error;
+      }
+        
       if (error) throw error;
       
+      if (uploadedAttachments.length > 0) newMedia.attachments = uploadedAttachments;
       state.media.unshift(newMedia);
     }
     

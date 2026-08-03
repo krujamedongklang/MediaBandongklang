@@ -503,15 +503,16 @@
         </div>
 
         <div class="form-group hidden" id="file-upload-group">
-          <label>อัปโหลดไฟล์สื่อการสอน <span class="required">*</span></label>
+          <label>อัปโหลดไฟล์สื่อการสอน <span class="required">*</span> <span style="font-size:0.8rem; font-weight:normal; color:var(--color-primary);">(เลือกได้มากกว่า 1 ไฟล์ เช่น PDF 2-5 ไฟล์)</span></label>
           <div class="file-upload-wrapper">
-            <input type="file" id="form-media-file" accept=".pdf,.mp4,.mp3,.zip,.png,.jpg,.jpeg">
+            <input type="file" id="form-media-file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mp3,.zip,.png,.jpg,.jpeg,.webp">
             <div class="file-upload-placeholder" id="media-file-placeholder">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
-              <span>เลือกไฟล์สื่อการสอน</span>
+              <span>กดที่นี่เพื่อเลือกไฟล์สื่อการสอน (เลือกหลายไฟล์พร้อมกันได้)</span>
             </div>
           </div>
           <span class="file-name-indicator" id="media-file-name-indicator"></span>
+          <div id="selected-files-container" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem;"></div>
         </div>
 
         <div class="form-actions border-top">
