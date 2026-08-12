@@ -991,9 +991,43 @@ function renderCatalog() {
   }).join('');
 }
 
+function getYouTubeId(url) {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? match[2] : null;
+}
+
+function getYouTubeThumbnailUrl(url) {
+  const videoId = getYouTubeId(url);
+  return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+}
+
 function getCoverHtml(item) {
   if (item.coverUrl) {
     return `<img class="media-card-cover" src="${item.coverUrl}" alt="${escapeHtml(item.title)}">`;
+  }
+  
+  // Auto-detect YouTube thumbnail if available
+  let ytThumb = getYouTubeThumbnailUrl(item.fileUrl);
+  if (!ytThumb && item.attachments && item.attachments.length > 0) {
+    for (const att of item.attachments) {
+      if (att && att.url) {
+        ytThumb = getYouTubeThumbnailUrl(att.url);
+        if (ytThumb) break;
+      }
+    }
+  }
+
+  if (ytThumb) {
+    return `
+      <div style="position: relative; width: 100%; height: 100%; overflow: hidden; background-color: #0f172a;">
+        <img class="media-card-cover" src="${ytThumb}" alt="${escapeHtml(item.title)}" style="width: 100%; height: 100%; object-fit: cover;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; background-color: rgba(220, 38, 38, 0.92); border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(0,0,0,0.4); border: 2px solid rgba(255,255,255,0.85);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style="margin-left: 2px;"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+        </div>
+      </div>
+    `;
   }
   
   const color = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
@@ -1515,14 +1549,14 @@ function renderAdminTable(searchQuery = '') {
   }
   
   tbody.innerHTML = filtered.map(item => {
-    const coverUrl = item.coverUrl || '';
+    const coverUrl = item.coverUrl || getYouTubeThumbnailUrl(item.fileUrl) || '';
     const subject = item.subject || '';
     const type = item.type || '';
     const level = item.level || '';
     const author = item.author || '';
     
     const imgHtml = coverUrl 
-      ? `<img class="admin-table-cover" src="${coverUrl}" alt="">`
+      ? `<img class="admin-table-cover" src="${coverUrl}" alt="" style="object-fit:cover;">`
       : `<div class="admin-table-cover" style="background-color: ${SUBJECT_COLORS[subject] || DEFAULT_COLOR}; opacity: 0.8; display:flex; align-items:center; justify-content:center; color:white; font-size:9px; font-weight:bold;">${type}</div>`;
       
     const canManage = state.currentUser.role === 'admin' || item.creatorUsername === state.currentUser.username;
