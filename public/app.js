@@ -989,6 +989,8 @@ function renderCatalog() {
       </article>
     `;
   }).join('');
+  
+  renderPdfThumbnails(visibleItems);
 }
 
 function getYouTubeId(url) {
@@ -1007,6 +1009,50 @@ function isImageUrl(url) {
   if (!url) return false;
   const l = url.toLowerCase();
   return l.endsWith('.jpg') || l.endsWith('.jpeg') || l.endsWith('.png') || l.endsWith('.webp');
+}
+
+function getPdfUrl(item) {
+  if (item.fileUrl && item.fileUrl.toLowerCase().includes('.pdf')) return item.fileUrl;
+  if (item.attachments && item.attachments.length > 0) {
+    const pdfAtt = item.attachments.find(att => att && att.url && att.url.toLowerCase().includes('.pdf'));
+    if (pdfAtt) return pdfAtt.url;
+  }
+  return null;
+}
+
+async function renderPdfThumbnails(items) {
+  if (!window.pdfjsLib) return;
+  try {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  } catch (e) {}
+
+  for (const item of items) {
+    if (item.coverUrl) continue;
+    const pdfUrl = getPdfUrl(item);
+    if (!pdfUrl) continue;
+
+    const canvas = document.getElementById(`pdf-thumb-canvas-${item.id}`);
+    const fallback = document.getElementById(`pdf-thumb-fallback-${item.id}`);
+    if (!canvas) continue;
+
+    try {
+      const loadingTask = window.pdfjsLib.getDocument(pdfUrl);
+      const pdf = await loadingTask.promise;
+      const page = await pdf.getPage(1);
+
+      const viewport = page.getViewport({ scale: 0.6 });
+      const ctx = canvas.getContext('2d');
+      canvas.height = viewport.height;
+      canvas.width = viewport.width;
+
+      await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+      canvas.style.display = 'block';
+      if (fallback) fallback.style.display = 'none';
+    } catch (err) {
+      console.warn(`Could not render PDF page 1 thumbnail for item ${item.id}:`, err);
+    }
+  }
 }
 
 function getCoverHtml(item) {
@@ -1047,8 +1093,34 @@ function getCoverHtml(item) {
     }
   }
 
-  // 3. Mini Paper Worksheet card illustration for Worksheets/PDFs
+  // 3. Auto-detect PDF file for auto page 1 canvas render with mini paper fallback
+  const pdfUrl = getPdfUrl(item);
   const color = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
+
+  if (pdfUrl) {
+    return `
+      <div class="pdf-thumb-wrapper" id="pdf-thumb-wrapper-${item.id}" style="position: relative; width: 100%; height: 100%; overflow: hidden; background-color: #f8fafc;">
+        <canvas id="pdf-thumb-canvas-${item.id}" class="media-card-cover" style="width: 100%; height: 100%; object-fit: cover; display: none;"></canvas>
+        <div id="pdf-thumb-fallback-${item.id}" style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 0; position: relative; border-bottom: 1px solid #e2e8f0;">
+          <div style="background: linear-gradient(135deg, ${color}, ${color}dd); padding: 0.65rem 0.85rem; color: white; display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">${escapeHtml(item.subject)}</span>
+            <span style="font-size: 0.68rem; background: rgba(255,255,255,0.22); padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 700;">PDF</span>
+          </div>
+          <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; gap: 0.5rem;">
+            <div style="width: 52px; height: 64px; background: white; border: 1.5px solid #cbd5e1; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.06); padding: 7px; display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden;">
+              <div style="height: 4px; background: ${color}; width: 65%; border-radius: 2px;"></div>
+              <div style="height: 3px; background: #e2e8f0; width: 100%; border-radius: 2px; margin-top: 2px;"></div>
+              <div style="height: 3px; background: #f1f5f9; width: 90%; border-radius: 2px;"></div>
+              <div style="height: 3px; background: #f1f5f9; width: 95%; border-radius: 2px;"></div>
+              <div style="height: 3px; background: #f1f5f9; width: 70%; border-radius: 2px;"></div>
+              <div style="position: absolute; bottom: 4px; right: 4px; background: ${color}; color: white; font-size: 7px; font-weight: bold; padding: 1px 3px; border-radius: 2px;">PDF</div>
+            </div>
+            <span style="font-size: 0.78rem; font-weight: 600; color: #475569;">${escapeHtml(item.type)}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
   
   if (item.type === 'ใบงาน' || item.type === 'แผนการสอน' || item.type === 'E-Book') {
     return `
@@ -1064,7 +1136,7 @@ function getCoverHtml(item) {
             <div style="height: 3px; background: #f1f5f9; width: 90%; border-radius: 2px;"></div>
             <div style="height: 3px; background: #f1f5f9; width: 95%; border-radius: 2px;"></div>
             <div style="height: 3px; background: #f1f5f9; width: 70%; border-radius: 2px;"></div>
-            <div style="position: absolute; bottom: 4px; right: 4px; background: ${color}; color: white; font-size: 7px; font-weight: bold; padding: 1px 3px; border-radius: 2px;">PDF</div>
+            <div style="position: absolute; bottom: 4px; right: 4px; background: ${color}; color: white; font-size: 7px; font-weight: bold; padding: 1px 3px; border-radius: 2px;">DOC</div>
           </div>
           <span style="font-size: 0.78rem; font-weight: 600; color: #475569;">${escapeHtml(item.type)}</span>
         </div>
