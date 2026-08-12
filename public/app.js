@@ -1003,12 +1003,18 @@ function getYouTubeThumbnailUrl(url) {
   return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
 }
 
+function isImageUrl(url) {
+  if (!url) return false;
+  const l = url.toLowerCase();
+  return l.endsWith('.jpg') || l.endsWith('.jpeg') || l.endsWith('.png') || l.endsWith('.webp');
+}
+
 function getCoverHtml(item) {
   if (item.coverUrl) {
     return `<img class="media-card-cover" src="${item.coverUrl}" alt="${escapeHtml(item.title)}">`;
   }
   
-  // Auto-detect YouTube thumbnail if available
+  // 1. Auto-detect YouTube thumbnail
   let ytThumb = getYouTubeThumbnailUrl(item.fileUrl);
   if (!ytThumb && item.attachments && item.attachments.length > 0) {
     for (const att of item.attachments) {
@@ -1029,10 +1035,44 @@ function getCoverHtml(item) {
       </div>
     `;
   }
-  
+
+  // 2. Auto-detect uploaded image file as cover
+  if (isImageUrl(item.fileUrl)) {
+    return `<img class="media-card-cover" src="${item.fileUrl}" alt="${escapeHtml(item.title)}">`;
+  }
+  if (item.attachments && item.attachments.length > 0) {
+    const imgAtt = item.attachments.find(att => att && isImageUrl(att.url));
+    if (imgAtt) {
+      return `<img class="media-card-cover" src="${imgAtt.url}" alt="${escapeHtml(item.title)}">`;
+    }
+  }
+
+  // 3. Mini Paper Worksheet card illustration for Worksheets/PDFs
   const color = SUBJECT_COLORS[item.subject] || DEFAULT_COLOR;
-  const icon = getTypeIcon(item.type);
   
+  if (item.type === 'ใบงาน' || item.type === 'แผนการสอน' || item.type === 'E-Book') {
+    return `
+      <div class="media-card-cover" style="background-color: #f8fafc; display: flex; flex-direction: column; justify-content: space-between; padding: 0; position: relative; height: 100%; width: 100%; border-bottom: 1px solid #e2e8f0;">
+        <div style="background: linear-gradient(135deg, ${color}, ${color}dd); padding: 0.65rem 0.85rem; color: white; display: flex; align-items: center; justify-content: space-between;">
+          <span style="font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;">${escapeHtml(item.subject)}</span>
+          <span style="font-size: 0.68rem; background: rgba(255,255,255,0.22); padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 700;">${item.type === 'ใบงาน' ? 'WORKSHEET' : 'DOCUMENT'}</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; gap: 0.5rem;">
+          <div style="width: 52px; height: 64px; background: white; border: 1.5px solid #cbd5e1; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.06); padding: 7px; display: flex; flex-direction: column; gap: 4px; position: relative; overflow: hidden;">
+            <div style="height: 4px; background: ${color}; width: 65%; border-radius: 2px;"></div>
+            <div style="height: 3px; background: #e2e8f0; width: 100%; border-radius: 2px; margin-top: 2px;"></div>
+            <div style="height: 3px; background: #f1f5f9; width: 90%; border-radius: 2px;"></div>
+            <div style="height: 3px; background: #f1f5f9; width: 95%; border-radius: 2px;"></div>
+            <div style="height: 3px; background: #f1f5f9; width: 70%; border-radius: 2px;"></div>
+            <div style="position: absolute; bottom: 4px; right: 4px; background: ${color}; color: white; font-size: 7px; font-weight: bold; padding: 1px 3px; border-radius: 2px;">PDF</div>
+          </div>
+          <span style="font-size: 0.78rem; font-weight: 600; color: #475569;">${escapeHtml(item.type)}</span>
+        </div>
+      </div>
+    `;
+  }
+  
+  const icon = getTypeIcon(item.type);
   return `
     <div class="media-card-cover" style="background: linear-gradient(135deg, ${color}dd, ${color}); display: flex; flex-direction: column; align-items: center; justify-content: center; color: white; padding: 1.5rem; text-align: center; gap: 0.5rem; height: 100%; width: 100%;">
       <div class="media-card-placeholder-icon" style="color: white; opacity: 0.9;">
